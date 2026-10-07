@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The whole list of what the app may do beyond its own sandbox folder. See Privacy.md. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- Files the user picks in a Save or Open dialog, for backups. No other files, and no
+	     network: nothing can leave the Mac through this app. -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<!-- The hardened runtime only loads libraries signed by the app's own Team ID, and a
+	     locally signed app has none, so it refused the SQLCipher framework bundled inside it
+	     and crashed at launch. This lets it load its own bundled libraries; the runtime's other
+	     protections stay, such as refusing code injected through DYLD_ environment variables.
+	     To go once SQLCipher is compiled into the app from source (TODO.md). -->
+	<key>com.apple.security.cs.disable-library-validation</key>
+	<true/>
+</dict>
+</plist>

@@ -1,0 +1,94 @@
+{
+  "about" : "Made up by SyncedNotesCore (swift run make-fixtures). Guards nothing. Format: Docs/LockFormat.md.",
+  "items" : [
+    {
+      "contentLength" : 69,
+      "contentSha256" : "08277a727d41313317dd317dfe94a6e078095a3044dca3ca0ba2f8dd02828fe3",
+      "contentUtf8" : "A made-up note, to prove another reader can open what the Mac locked.",
+      "description" : "A short note in English.",
+      "file" : "note-plain.snl",
+      "id" : "6e58b821a3cc649f828ce30ad9de8faa",
+      "kind" : "note",
+      "opens" : true
+    },
+    {
+      "contentLength" : 59,
+      "contentSha256" : "ac3f355fe89eff3e281412fb117a7ba0eedad41f7e4c966c45f5b4231332fbb6",
+      "contentUtf8" : "ملاحظة مختلقة، made up: 🗒️ café, naïve.",
+      "description" : "Arabic, an emoji, and accented letters, to check UTF-8 survives the trip.",
+      "file" : "note-scripts.snl",
+      "id" : "1a73f4554ada33a870c494b06ddd35a9",
+      "kind" : "note",
+      "opens" : true
+    },
+    {
+      "contentLength" : 0,
+      "contentSha256" : "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "contentUtf8" : "",
+      "description" : "A note with no content at all.",
+      "file" : "note-empty.snl",
+      "id" : "45bcccd75e4ea9ab3bab87a772ca7efd",
+      "kind" : "note",
+      "opens" : true
+    },
+    {
+      "contentLength" : 66893,
+      "contentSha256" : "f6f1d371a0e0efde466764911623c7652c756626de48a9329daf1bb88c19d08c",
+      "description" : "A long note, 2,000 lines.",
+      "file" : "note-long.snl",
+      "id" : "0be00f3e399e2b8a832a7d93bc83d1b2",
+      "kind" : "note",
+      "opens" : true
+    },
+    {
+      "contentLength" : 70,
+      "contentSha256" : "c414cd0e204de974f73753c7e28d7638e7b3691bb8b1a2bab6b25bb7fed7ce77",
+      "description" : "A picture: a one-pixel PNG, its bytes unchanged.",
+      "file" : "picture-pixel.snl",
+      "id" : "0a091c06ca0433ba93af485fe94a888b",
+      "kind" : "picture",
+      "opens" : true
+    },
+    {
+      "description" : "note-plain.snl with one bit of its locked content changed.",
+      "file" : "refuse-tampered.snl",
+      "opens" : false,
+      "refusedAs" : "damaged"
+    },
+    {
+      "description" : "note-plain.snl with its item ID changed: the label is sealed to the content.",
+      "file" : "refuse-renamed.snl",
+      "opens" : false,
+      "refusedAs" : "damaged"
+    },
+    {
+      "description" : "note-plain.snl with its last 5 bytes cut off.",
+      "file" : "refuse-truncated.snl",
+      "opens" : false,
+      "refusedAs" : "damaged"
+    },
+    {
+      "description" : "A note locked in a different vault, with the same passphrase.",
+      "file" : "refuse-other-vault.snl",
+      "opens" : false,
+      "refusedAs" : "wrongVault"
+    }
+  ],
+  "passphrase" : "made-up café passphrase",
+  "passphraseDecomposed" : "made-up café passphrase",
+  "vault" : {
+    "file" : "vault.bin",
+    "id" : "26d126e174412817c70af1603da20d7e",
+    "keys" : {
+      "database" : "69715f159000e379d982cef8eca890a430fce83f3cab38490a0201325e2f7112",
+      "master" : "3c4fc45a0897f91cd9752ad6fa5ca010856c3952fffaa570a135245d7dfc304e",
+      "notes" : "7aa1d4f55a4c3a3c2bfe58b00da5d281c04d650e4fc663cefed0f36e483bba8e",
+      "pictures" : "da6e34c80902f4994552534b769d8d71948c0db0b530b48c6165e34d4e9622fe"
+    },
+    "lanes" : 1,
+    "memoryKiB" : 19456,
+    "passes" : 2,
+    "salt" : "7f9cc9eb8e8eb6390dc43b235b84201e"
+  },
+  "wrongPassphrase" : "made-up cafe passphrase"
+}

@@ -1,0 +1,205 @@
+// What is inside a locked note (see Docs/LockFormat.md).
+//
+// The one definition of a note's content: the app's code is generated from this file
+// (SyncedNotesCore/Sources/SyncedNotesCore/Generated, see the README). Fields are only ever added, under new
+// numbers; a number, once used, keeps its meaning for good, so notes written by an older app
+// still open in a newer one.
+//
+// The shape follows Apple Notes' own storage: a note is text with formatting laid over it as
+// runs, and anything that is not text (a picture, a table, a divider) is one U+FFFC character
+// in the text, with a run saying what it is. What is recorded is meaning, never looks: "bold",
+// "heading", "yellow highlight", not fonts, point sizes or RGB, except for a text colour the
+// user picked by hand, which has no name.
+//
+// Positions (Run.start, Run.length) count UTF-16 code units, which is how both Swift's
+// NSString and Java strings count, so another reader would agree on emoji and Arabic alike.
+
+syntax = "proto3";
+
+package syncednotes.note.v1;
+
+option swift_prefix = "Stored";
+option java_package = "syncednotes.note.v1";
+option java_multiple_files = true;
+
+message Note {
+  // 1 for everything this file describes.
+  uint32 format_version = 1;
+  // In order. Joined with line breaks, their texts are the note's text.
+  repeated Paragraph paragraphs = 2;
+}
+
+message Paragraph {
+  // The paragraph's text, without its line break.
+  string text = 1;
+  // Formatting over parts of the text. Text no run covers is plain.
+  repeated Run runs = 2;
+  Role role = 3;
+  // Only for a checklist item.
+  bool checked = 4;
+  // The lists this paragraph is an item of, outermost first; empty when it is in none.
+  repeated ListLevel lists = 5;
+  Alignment alignment = 6;
+  Direction direction = 7;
+  // Indent steps the user added (Increase Indent), beyond what the role or list implies.
+  uint32 indent = 8;
+  // Line spacing as a multiple of normal; 0 means normal (1).
+  float line_spacing = 9;
+}
+
+enum Role {
+  ROLE_BODY = 0;
+  ROLE_TITLE = 1;
+  ROLE_HEADING = 2;
+  ROLE_SUBHEADING = 3;
+  ROLE_QUOTE = 4;
+  ROLE_CODE_BLOCK = 5;
+  ROLE_CHECKLIST = 6;
+  ROLE_DIVIDER = 7;
+}
+
+message ListLevel {
+  ListKind kind = 1;
+  // Which list this is, within the note: paragraphs next to each other with the same number
+  // at a level are items of one list, so its numbering runs on; a different number starts a
+  // new list.
+  uint32 list = 2;
+  // The number a numbered list starts at; 0 means 1. Lets items with writing between them
+  // carry on counting: typing "2. " after a paragraph starts a list at 2.
+  uint32 start = 3;
+}
+
+enum ListKind {
+  LIST_KIND_UNSPECIFIED = 0;
+  LIST_KIND_BULLETED = 1;
+  LIST_KIND_DASHED = 2;
+  LIST_KIND_NUMBERED = 3;
+}
+
+enum Alignment {
+  ALIGNMENT_NATURAL = 0;
+  ALIGNMENT_LEFT = 1;
+  ALIGNMENT_CENTER = 2;
+  ALIGNMENT_RIGHT = 3;
+  ALIGNMENT_JUSTIFIED = 4;
+}
+
+enum Direction {
+  DIRECTION_NATURAL = 0;
+  DIRECTION_LEFT_TO_RIGHT = 1;
+  DIRECTION_RIGHT_TO_LEFT = 2;
+}
+
+message Run {
+  uint32 start = 1;
+  uint32 length = 2;
+  bool bold = 3;
+  bool italic = 4;
+  bool underline = 5;
+  bool strikethrough = 6;
+  // Inline code: monospaced.
+  bool code = 7;
+  Highlight highlight = 8;
+  // A colour picked by hand in the colour panel; absent means the normal text colour.
+  Color color = 9;
+  // Size relative to the paragraph's normal size (Bigger, Smaller); 0 means normal (1).
+  float relative_size = 10;
+  // Set on a run of length 1 over a U+FFFC character: what stands there.
+  Embedded embedded = 11;
+}
+
+enum Highlight {
+  HIGHLIGHT_NONE = 0;
+  HIGHLIGHT_YELLOW = 1;
+  HIGHLIGHT_GREEN = 2;
+  HIGHLIGHT_BLUE = 3;
+  HIGHLIGHT_PINK = 4;
+  HIGHLIGHT_PURPLE = 5;
+  HIGHLIGHT_ORANGE = 6;
+}
+
+// sRGB, each component from 0 to 1.
+message Color {
+  float red = 1;
+  float green = 2;
+  float blue = 3;
+  float alpha = 4;
+}
+
+message Embedded {
+  oneof kind {
+    Picture picture = 1;
+    Table table = 2;
+    Divider divider = 3;
+  }
+}
+
+// The picture itself is a locked item of its own (kind 2), stored and sent separately; this
+// only points to it.
+message Picture {
+  // The picture's 16-byte item ID.
+  bytes id = 1;
+  // The picture's file type, as a Uniform Type Identifier: "public.png", "public.jpeg".
+  string type = 2;
+  // In points, before any shrinking to fit the note.
+  uint32 width = 3;
+  uint32 height = 4;
+}
+
+message Table {
+  repeated Row rows = 1;
+}
+
+message Row {
+  repeated Cell cells = 1;
+}
+
+// A cell holds text of its own, formatted like a note's.
+message Cell {
+  repeated Paragraph paragraphs = 1;
+}
+
+message Divider {}
+
+// A backup: every note there is and their pictures, in one file, locked as one item of kind
+// 3 (see LockFormat.md, "A backup file"). Nothing inside is readable without the passphrase,
+// not the notes, their dates, or how many there are.
+message Backup {
+  uint32 format_version = 1;
+  repeated BackupNote notes = 2;
+  repeated BackupPicture pictures = 3;
+  // Every folder, parents before the folders inside them. None in a backup made before folders.
+  repeated BackupFolder folders = 4;
+}
+
+// A folder of notes. Folders can hold folders.
+message BackupFolder {
+  // The folder's 16-byte ID.
+  bytes id = 1;
+  string name = 2;
+  // The ID of the folder it is in; empty for a folder at the top.
+  bytes parent = 3;
+  // Seconds since 1970, UTC.
+  double created = 4;
+}
+
+message BackupNote {
+  // The note's 16-byte ID, the same on every device.
+  bytes id = 1;
+  // Seconds since 1970, UTC.
+  double created = 2;
+  // When it last changed: on import, the newer copy of a note wins.
+  double updated = 3;
+  Note note = 4;
+  // When it was moved to the Trash, in seconds since 1970; 0 when it is not in the Trash.
+  // Restored into the Trash, so a backup never loses a note just for being in it.
+  double trashed = 5;
+  // The ID of the folder it is in; empty for a note in no folder.
+  bytes folder = 6;
+}
+
+message BackupPicture {
+  bytes id = 1;
+  // The picture file's own bytes, unchanged.
+  bytes bytes = 2;
+}

@@ -1,0 +1,16 @@
+# Anything that could carry a key, a password, or a note.
+keystore.properties*
+*.jks
+*.keystore
+*.snx
+*.snbackup
+notes.json
+*.bak
+
+# Build output and tooling noise.
+build/
+.build/
+.swiftpm/
+DerivedData/
+xcuserdata/
+.DS_Store

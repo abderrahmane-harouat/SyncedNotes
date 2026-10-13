@@ -1,0 +1,52 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The note canvas, and Samsung's floating rich-text toolbar under it (above the keyboard). -->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:id="@+id/root"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    android:background="@color/note_background"
+    android:orientation="vertical">
+
+    <FrameLayout
+        android:id="@+id/canvas_holder"
+        android:layout_width="match_parent"
+        android:layout_height="0dp"
+        android:layout_weight="1" />
+
+    <LinearLayout
+        android:id="@+id/toolbar"
+        android:layout_width="match_parent"
+        android:layout_height="42dp"
+        android:layout_marginStart="6dp"
+        android:layout_marginEnd="6dp"
+        android:layout_marginBottom="6dp"
+        android:background="@drawable/toolbar_background"
+        android:elevation="4dp"
+        android:gravity="center_vertical"
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="12dp">
+
+        <ImageButton
+            android:id="@+id/text_options"
+            style="@style/ToolbarButton"
+            android:contentDescription="@string/text_options"
+            android:src="@drawable/ic_text_options" />
+
+        <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" android:minWidth="15dp" />
+
+        <ImageButton
+            android:id="@+id/undo"
+            style="@style/ToolbarButton"
+            android:contentDescription="@string/undo"
+            android:src="@drawable/ic_undo" />
+
+        <Space android:layout_width="15dp" android:layout_height="1dp" />
+
+        <ImageButton
+            android:id="@+id/redo"
+            style="@style/ToolbarButton"
+            android:contentDescription="@string/redo"
+            android:src="@drawable/ic_redo" />
+    </LinearLayout>
+</LinearLayout>

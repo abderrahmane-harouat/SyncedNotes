@@ -1,0 +1,19 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">SyncedNotes</string>
+    <string name="text_options">Text options</string>
+    <string name="close">Close</string>
+    <string name="bullets">Bullet points</string>
+    <string name="numbering">Numbered list</string>
+    <string name="align_left">Align text to left</string>
+    <string name="align_center">Align text to center</string>
+    <string name="align_right">Align text to right</string>
+    <string name="bold">Bold</string>
+    <string name="italic">Italic</string>
+    <string name="underline">Underline</string>
+    <string name="strikethrough">Strikethrough</string>
+    <string name="indent">Indent</string>
+    <string name="outdent">Outdent</string>
+    <string name="undo">Undo</string>
+    <string name="redo">Redo</string>
+</resources>

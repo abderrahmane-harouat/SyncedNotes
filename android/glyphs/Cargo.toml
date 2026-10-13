@@ -1,0 +1,18 @@
+[package]
+name = "glyphs"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+# No dependencies, on purpose: the font parser, shaper, rasterizer and compositor are ours, and
+# the JNI surface is declared by hand from the NDK's jni.h (see src/jni.rs).
+[dependencies]
+
+[lib]
+# cdylib for Android and for the JVM tests on the Mac; rlib so `cargo test` can link the code.
+crate-type = ["cdylib", "rlib"]
+
+[profile.release]
+opt-level = 3
+lto = true
+codegen-units = 1

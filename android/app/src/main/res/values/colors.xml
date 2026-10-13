@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Samsung Notes' light theme values for the rich-text toolbar and Text options panel. -->
+<resources>
+    <color name="note_background">#FFFCFCFC</color>
+    <color name="panel_background">#FFFCFCFC</color>
+    <color name="panel_group">#FFF4F4F4</color>
+    <color name="panel_title">#FF252525</color>
+    <color name="toolbar_stroke">#FFF1F1F1</color>
+    <color name="icon_tint">#FF4C4C4C</color>
+    <color name="item_selected">#14000000</color>
+    <color name="item_pressed">#1A000000</color>
+</resources>

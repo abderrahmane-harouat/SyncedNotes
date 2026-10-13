@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Samsung's toolbar item states: an 8% grey circle when selected, a 10% ripple when pressed. -->
+<ripple xmlns:android="http://schemas.android.com/apk/res/android" android:color="@color/item_pressed">
+    <item android:id="@android:id/mask">
+        <shape android:shape="oval"><solid android:color="#FFFFFFFF" /></shape>
+    </item>
+    <item>
+        <selector>
+            <item android:state_selected="true">
+                <shape android:shape="oval"><solid android:color="@color/item_selected" /></shape>
+            </item>
+        </selector>
+    </item>
+</ripple>

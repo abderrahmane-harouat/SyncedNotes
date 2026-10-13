@@ -1,0 +1,92 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Samsung's Text options card: 300 x 170dp, a 60dp title row, then two rows of 40dp groups. The
+     outer padding leaves room for the card's shadow inside the popup window. -->
+<FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="wrap_content"
+    android:layout_height="wrap_content"
+    android:paddingStart="4dp"
+    android:paddingTop="8dp"
+    android:paddingEnd="4dp"
+    android:paddingBottom="8dp"
+    android:clipToPadding="false">
+
+    <LinearLayout
+        android:layout_width="300dp"
+        android:layout_height="170dp"
+        android:background="@drawable/panel_background"
+        android:elevation="4dp"
+        android:orientation="vertical"
+        android:paddingBottom="20dp">
+
+        <RelativeLayout
+            android:layout_width="match_parent"
+            android:layout_height="60dp"
+            android:layout_marginStart="24dp"
+            android:layout_marginEnd="24dp">
+
+            <TextView
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_alignParentStart="true"
+                android:layout_centerVertical="true"
+                android:layout_toStartOf="@id/close"
+                android:ellipsize="end"
+                android:fontFamily="sans-serif-medium"
+                android:maxLines="1"
+                android:text="@string/text_options"
+                android:textColor="@color/panel_title"
+                android:textSize="17sp" />
+
+            <ImageButton
+                android:id="@+id/close"
+                style="@style/PanelButton"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:layout_alignParentEnd="true"
+                android:layout_centerVertical="true"
+                android:contentDescription="@string/close"
+                android:src="@drawable/ic_close" />
+        </RelativeLayout>
+
+        <RelativeLayout
+            android:layout_width="260dp"
+            android:layout_height="0dp"
+            android:layout_gravity="center_horizontal"
+            android:layout_weight="1">
+
+        <LinearLayout style="@style/PanelGroup" android:layout_width="100dp"
+            android:layout_alignParentStart="true" android:layout_alignParentTop="true" android:layoutDirection="ltr">
+            <ImageButton android:id="@+id/bullets" style="@style/PanelButton" android:src="@drawable/ic_list_bullets" android:contentDescription="@string/bullets" />
+            <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+            <ImageButton android:id="@+id/numbering" style="@style/PanelButton" android:src="@drawable/ic_list_numbers" android:contentDescription="@string/numbering" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/PanelGroup" android:layout_width="152dp"
+            android:layout_alignParentEnd="true" android:layout_alignParentTop="true" android:layoutDirection="ltr">
+            <ImageButton android:id="@+id/align_left" style="@style/PanelButton" android:src="@drawable/ic_align_left" android:contentDescription="@string/align_left" />
+            <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+            <ImageButton android:id="@+id/align_center" style="@style/PanelButton" android:src="@drawable/ic_align_center" android:contentDescription="@string/align_center" />
+            <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+            <ImageButton android:id="@+id/align_right" style="@style/PanelButton" android:src="@drawable/ic_align_right" android:contentDescription="@string/align_right" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/PanelGroup" android:layout_width="160dp"
+            android:layout_alignParentStart="true" android:layout_alignParentBottom="true">
+            <ImageButton android:id="@+id/bold" style="@style/PanelButton" android:src="@drawable/ic_bold" android:contentDescription="@string/bold" />
+            <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+            <ImageButton android:id="@+id/italic" style="@style/PanelButton" android:src="@drawable/ic_italic" android:contentDescription="@string/italic" />
+            <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+            <ImageButton android:id="@+id/underline" style="@style/PanelButton" android:src="@drawable/ic_underline" android:contentDescription="@string/underline" />
+            <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+            <ImageButton android:id="@+id/strikethrough" style="@style/PanelButton" android:src="@drawable/ic_strikethrough" android:contentDescription="@string/strikethrough" />
+        </LinearLayout>
+
+        <LinearLayout style="@style/PanelGroup" android:layout_width="92dp"
+            android:layout_alignParentEnd="true" android:layout_alignParentBottom="true">
+            <ImageButton android:id="@+id/indent" style="@style/PanelButton" android:src="@drawable/ic_indent" android:contentDescription="@string/indent" />
+            <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+            <ImageButton android:id="@+id/outdent" style="@style/PanelButton" android:src="@drawable/ic_outdent" android:contentDescription="@string/outdent" />
+        </LinearLayout>
+        </RelativeLayout>
+    </LinearLayout>
+</FrameLayout>

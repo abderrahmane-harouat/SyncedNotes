@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The bar under the font colour and highlight icons; tinted with the colour in use. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M4.5,18.9H19.5V20.7H4.5Z" android:fillColor="#FFFFFFFF" />
+</vector>

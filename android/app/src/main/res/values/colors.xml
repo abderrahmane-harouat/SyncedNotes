@@ -9,4 +9,7 @@
     <color name="icon_tint">#FF4C4C4C</color>
     <color name="item_selected">#14000000</color>
     <color name="item_pressed">#1A000000</color>
+    <color name="size_label">#FF4C4C4C</color>
+    <color name="size_selected">#FFF46A4E</color>
+    <color name="list_text">#FF252525</color>
 </resources>

@@ -14,6 +14,10 @@
     <string name="strikethrough">Strikethrough</string>
     <string name="indent">Indent</string>
     <string name="outdent">Outdent</string>
+    <string name="checklist">Checklist</string>
+    <string name="font_color">Font color</string>
+    <string name="font_background">Font background</string>
+    <string name="font_size">Font size</string>
     <string name="undo">Undo</string>
     <string name="redo">Redo</string>
 </resources>

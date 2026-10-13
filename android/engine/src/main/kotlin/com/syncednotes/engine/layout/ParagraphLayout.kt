@@ -3,7 +3,6 @@ package com.syncednotes.engine.layout
 import com.syncednotes.engine.render.ShapedRun
 import com.syncednotes.engine.text.Alignment
 import com.syncednotes.engine.text.Boundaries
-import com.syncednotes.engine.text.CharStyle
 
 /**
  * One paragraph shaped once and broken into lines. Positions are relative to the paragraph:
@@ -15,13 +14,13 @@ import com.syncednotes.engine.text.CharStyle
 class ParagraphLayout(
     val text: String,
     run: ShapedRun,
-    /** Style runs: styleStarts[i] is where run i begins; styleFlags[i] has bit `1 shl ordinal` per CharStyle. */
-    private val styleStarts: IntArray,
-    private val styleFlags: IntArray,
+    val runs: StyleRuns,
     maxWidth: Float,
-    val lineHeight: Float,
-    /** Distance from a line's top to its baseline. */
-    val baseline: Float,
+    /** Ascent and descent of the font per pixel of text size. */
+    private val ascentPerPx: Float,
+    private val descentPerPx: Float,
+    /** Line height per pixel of text size: Samsung's lines are 1.35 times the text size. */
+    private val lineSpacing: Float,
     /** Where the text starts: the indent, plus room for a bullet or number. */
     val textLeft: Float,
     val alignment: Alignment,
@@ -39,6 +38,11 @@ class ParagraphLayout(
     val lineStarts: IntArray
     val lineCount: Int
     val height: Float
+    private val lineTops: FloatArray
+    private val lineHeights: FloatArray
+    private val lineBaselines: FloatArray
+    /** The largest text size on each line, which sets its height. */
+    private val lineSizes: FloatArray
 
     init {
         var pen = 0f
@@ -63,7 +67,33 @@ class ParagraphLayout(
         }
         lineStarts = starts.toIntArray()
         lineCount = lineStarts.size
-        height = lineCount * lineHeight
+
+        // Each line is as tall as its largest text, with the extra spacing split above and
+        // below the glyphs so the text sits centred in its line.
+        lineTops = FloatArray(lineCount)
+        lineHeights = FloatArray(lineCount)
+        lineBaselines = FloatArray(lineCount)
+        lineSizes = FloatArray(lineCount)
+        var y = 0f
+        for (line in 0 until lineCount) {
+            val ls = lineStarts[line]
+            val le = if (line + 1 < lineCount) lineStarts[line + 1] else text.length
+            var size = runs.sizes[runs.runAt(ls)]
+            var r = runs.runAt(ls)
+            while (r < runs.count && runs.start(r) < le) {
+                size = maxOf(size, runs.sizes[r])
+                r++
+            }
+            val ascent = size * ascentPerPx
+            val descent = size * descentPerPx
+            val h = size * lineSpacing
+            lineTops[line] = y
+            lineHeights[line] = h
+            lineBaselines[line] = (h - (ascent + descent)) / 2f + ascent
+            lineSizes[line] = size
+            y += h
+        }
+        height = y
     }
 
     private fun widthOf(start: Int, end: Int): Float {
@@ -95,7 +125,23 @@ class ParagraphLayout(
 
     fun lineStart(line: Int): Int = lineStarts[line]
     fun lineEnd(line: Int): Int = if (line + 1 < lineCount) lineStarts[line + 1] else text.length
-    fun lineTop(line: Int): Float = line * lineHeight
+    fun lineTop(line: Int): Float = lineTops[line]
+    fun lineHeight(line: Int): Float = lineHeights[line]
+    /** Distance from the line's top to its baseline. */
+    fun baseline(line: Int): Float = lineBaselines[line]
+
+    /** The line under [y], measured from the paragraph's top, clamped to the first and last. */
+    fun lineAtY(y: Float): Int {
+        var line = 0
+        while (line + 1 < lineCount && lineTops[line + 1] <= y) line++
+        return line
+    }
+
+    /** The text size a caret at [offset] stands for: the character before it, as typing would inherit. */
+    fun sizeAtCaret(offset: Int): Float = runs.sizes[runs.runAt(maxOf(0, offset - 1))]
+
+    fun ascentFor(size: Float) = size * ascentPerPx
+    fun descentFor(size: Float) = size * descentPerPx
 
     /** Where the visible text of a line ends, ignoring the spaces that hang past the margin. */
     fun lineWidth(line: Int): Float = widthOf(lineStart(line), lineEnd(line))
@@ -143,10 +189,5 @@ class ParagraphLayout(
     /** Glyph origins, relative to the text area's left edge and the paragraph's top. */
     fun glyphX(g: Int, line: Int): Float = lineLeft(line) + glyphX[g] - caretX[lineStarts[line]]
 
-    fun glyphBaselineY(g: Int, line: Int): Float = lineTop(line) + baseline + glyphY[g]
-
-    val styleRunCount: Int get() = styleStarts.size
-    fun styleRunStart(i: Int): Int = styleStarts[i]
-    fun styleRunEnd(i: Int): Int = if (i + 1 < styleStarts.size) styleStarts[i + 1] else text.length
-    fun styleRunHas(i: Int, style: CharStyle): Boolean = styleFlags[i] and (1 shl style.ordinal) != 0
+    fun glyphBaselineY(g: Int, line: Int): Float = lineTops[line] + lineBaselines[line] + glyphY[g]
 }

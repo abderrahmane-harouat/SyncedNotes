@@ -10,7 +10,8 @@ import kotlin.test.assertTrue
 class DocumentLayoutTest {
     private fun layoutOf(text: String, width: Float = 300f): Pair<TextDocument, DocumentLayout> {
         val doc = TextDocument()
-        val layout = DocumentLayout(doc, TestFonts.family, 40f, 60f, 50f, 60f)
+        // 40px text (a unit of 40/17px at size 17) on 60px lines.
+        val layout = DocumentLayout(doc, TestFonts.family, 40f / 17, 17, 1.5f, 50f, 60f)
         layout.setWidth(width)
         doc.replace(0, 0, text)
         return doc to layout

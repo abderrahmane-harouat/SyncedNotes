@@ -1,6 +1,7 @@
 package com.syncednotes.engine.editor
 
 import com.syncednotes.engine.layout.DocumentLayout
+import com.syncednotes.engine.layout.ParagraphLayout
 import com.syncednotes.engine.render.DrawList
 import com.syncednotes.engine.render.FontFamily
 import com.syncednotes.engine.render.PathBuilder
@@ -10,6 +11,8 @@ import com.syncednotes.engine.text.CharStyle
 import com.syncednotes.engine.text.ListType
 import com.syncednotes.engine.text.ParagraphStyle
 import com.syncednotes.engine.text.TextDocument
+import com.syncednotes.engine.text.ValueRanges
+import com.syncednotes.engine.text.ValueStyle
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.hypot
@@ -25,15 +28,18 @@ import kotlin.math.sqrt
  */
 class Composer(fonts: FontFamily, val style: EditorStyle, private val host: ComposerHost) {
     val document = TextDocument()
-    private val layout = DocumentLayout(document, fonts, style.textSize, style.lineHeight, style.indentWidth, style.listMarkerWidth)
+    private val layout = DocumentLayout(document, fonts, style.sizeUnit, style.defaultSize, style.lineSpacing, style.indentWidth, style.listMarkerWidth)
     private val history = History(document.snapshot())
-    private val metrics = fonts.regular.primary.metrics(style.textSize)
+    /** Font metrics for 1px text; multiplied by each run's size where it is drawn. */
+    private val unitMetrics = fonts.regular.primary.metrics(1f)
 
     /**
      * Styles chosen with a bare caret, waiting for the next typed text (Samsung's zero-length
      * spans at the cursor). Forgotten as soon as the caret is moved.
      */
     private val typingStyle = HashMap<CharStyle, Boolean>()
+    /** The same for colour, highlight and size; a null value means "back to the default". */
+    private val typingValues = HashMap<ValueStyle, Int?>()
 
     var selection = Selection(0)
         private set
@@ -113,10 +119,12 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         // with the next tap.
         insertionHandleUntil = 0
         val change = document.replace(start, end, text)
-        if (text.isNotEmpty() && typingStyle.isNotEmpty()) {
+        if (text.isNotEmpty() && (typingStyle.isNotEmpty() || typingValues.isNotEmpty())) {
             for ((style, on) in typingStyle) document.setStyle(style, on, start, start + text.length)
+            for ((style, value) in typingValues) document.setValue(style, value, start, start + text.length)
             // From here on, typing extends the styled text by itself.
             typingStyle.clear()
+            typingValues.clear()
         }
         history.record(change.start, change.removed, change.inserted, before, after, document.snapshot(), now, mergeable)
         if (composingStart >= 0) {
@@ -164,6 +172,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         }
         selection = clamped
         typingStyle.clear()
+        typingValues.clear()
         clearComposing()
         history.seal()
         afterSelectionMoved(now)
@@ -185,6 +194,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val e = history.undo() ?: return false
         clearComposing()
         typingStyle.clear()
+        typingValues.clear()
         if (e.inserted.isNotEmpty() || e.removed.isNotEmpty()) document.replace(e.start, e.start + e.inserted.length, e.removed)
         document.restore(e.formatBefore)
         selection = clampSelection(e.selectionBefore)
@@ -199,6 +209,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val e = history.redo() ?: return false
         clearComposing()
         typingStyle.clear()
+        typingValues.clear()
         if (e.inserted.isNotEmpty() || e.removed.isNotEmpty()) document.replace(e.start, e.start + e.removed.length, e.inserted)
         document.restore(e.formatAfter)
         selection = clampSelection(e.selectionAfter)
@@ -365,7 +376,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     fun caretInView(): FloatArray {
         val r = layout.caretRect(selection.focus, selection.upstream)
         val baseline = originY + r.baseline
-        return floatArrayOf(originX + r.x, baseline - metrics.ascent, baseline, baseline + metrics.descent)
+        return floatArrayOf(originX + r.x, baseline - r.ascent, baseline, baseline + r.descent)
     }
 
     // --- Formatting (Samsung's Text options) ------------------------------------------------
@@ -388,6 +399,13 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val canOutdent: Boolean,
         val canUndo: Boolean,
         val canRedo: Boolean,
+        /** Text colour; null for the default (also shown when the selection mixes colours, as Samsung does). */
+        val color: Int?,
+        /** Highlight colour; null for none. */
+        val highlight: Int?,
+        /** Size in Samsung's units; null when the selection mixes sizes, which leaves the label blank. */
+        val size: Int?,
+        val checked: Boolean,
     ) {
         fun has(style: CharStyle): Boolean = when (style) {
             CharStyle.BOLD -> bold
@@ -418,7 +436,66 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         return FormatState(
             styleOn(CharStyle.BOLD), styleOn(CharStyle.ITALIC), styleOn(CharStyle.UNDERLINE), styleOn(CharStyle.STRIKETHROUGH),
             list, alignment, canIndent, canOutdent, history.canUndo, history.canRedo,
+            color = valueOn(ValueStyle.COLOR).takeIf { it != ValueRanges.MIXED },
+            highlight = valueOn(ValueStyle.HIGHLIGHT).takeIf { it != ValueRanges.MIXED },
+            size = when (val v = valueOn(ValueStyle.SIZE)) {
+                ValueRanges.MIXED -> null
+                null -> style.defaultSize
+                else -> v
+            },
+            checked = list == ListType.CHECKBOX && styles.all { it.checked },
         )
+    }
+
+    private fun valueOn(style: ValueStyle): Int? {
+        val sel = selection
+        if (sel.isCollapsed && typingValues.containsKey(style)) return typingValues[style]
+        return document.uniformValue(style, sel.start, sel.end)
+    }
+
+    /** Text colour for the selection, or for what is typed next; null puts back the default. */
+    fun setColor(argb: Int?, now: Long) = setValue(ValueStyle.COLOR, argb, now)
+
+    /** Highlight behind the selection, or behind what is typed next; null removes it. */
+    fun setHighlight(argb: Int?, now: Long) = setValue(ValueStyle.HIGHLIGHT, argb, now)
+
+    /** Text size in Samsung's units (17 is the default). */
+    fun setSize(size: Int, now: Long) = setValue(ValueStyle.SIZE, size.takeIf { it != style.defaultSize }, now)
+
+    private fun setValue(valueStyle: ValueStyle, value: Int?, now: Long) {
+        val sel = selection
+        if (sel.isCollapsed) {
+            typingValues[valueStyle] = value
+            host.formatChanged()
+            // A new size changes the caret's height straight away.
+            host.requestFrame()
+            return
+        }
+        formatEdit(now) { document.setValue(valueStyle, value, sel.start, sel.end) }
+    }
+
+    /** Ticks or unticks the checklist items the selection touches. */
+    fun toggleChecked(now: Long) {
+        val range = selectedParagraphs().filter { document.paragraphStyle(it).list == ListType.CHECKBOX }
+        if (range.isEmpty()) return
+        val target = !range.all { document.paragraphStyle(it).checked }
+        formatEdit(now) { for (p in range) document.setParagraphStyle(p, document.paragraphStyle(p).copy(checked = target)) }
+    }
+
+    /** Ticks the checkbox under a tap, if there is one, without moving the caret. */
+    private fun tapCheckbox(x: Float, y: Float, now: Long): Boolean {
+        val docY = y - originY
+        val p = layout.paragraphAtY(docY)
+        val ps = document.paragraphStyle(p)
+        if (ps.list != ListType.CHECKBOX) return false
+        val pl = layout.paragraph(p)
+        val localY = docY - layout.paragraphTop(p)
+        if (localY < 0 || localY > pl.lineHeight(0)) return false
+        val markerLeft = originX + pl.lineLeft(0) - style.listMarkerWidth
+        // The whole hanging margin is the target, so the small box is easy to hit.
+        if (x < markerLeft - style.touchSlop || x > markerLeft + style.listMarkerWidth) return false
+        formatEdit(now) { document.setParagraphStyle(p, ps.copy(checked = !ps.checked)) }
+        return true
     }
 
     /**
@@ -700,6 +777,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         layout.offsetAt(x - originX, y - originY)
 
     private fun tap(x: Float, y: Float, now: Long) {
+        if (tapCheckbox(x, y, now)) return
         val isDouble = now - lastTapTime < style.doubleTapMs && hypot(x - lastTapX, y - lastTapY) < style.touchSlop * 4
         focused = true
         host.showKeyboard()
@@ -766,7 +844,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     private fun handleAt(offset: Int, upstream: Boolean, side: Int): HandleSpot {
         val r = layout.caretRect(offset, upstream)
         val tipX = originX + r.x
-        val tipY = originY + r.baseline + metrics.descent
+        val tipY = originY + r.baseline + r.descent
         val radius = style.handleRadius
         return when (side) {
             -1 -> HandleSpot(tipX, tipY, tipX - radius, tipY + radius)
@@ -823,97 +901,23 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         list.reset()
         list.rect(0f, 0f, viewWidth.toFloat(), viewHeight.toFloat(), style.background)
         if (viewWidth == 0 || viewHeight == 0) return
-        val sel = selection
-        val newlineWidth = style.textSize * 0.3f
         val first = layout.paragraphAtY(scrollY - style.paddingTop - insetTop)
         for (p in first until document.paragraphCount) {
             val top = originY + layout.paragraphTop(p)
             if (top > viewHeight) break
             val pl = layout.paragraph(p)
             if (top + pl.height < 0) continue
-            val base = document.paragraphStart(p)
-            drawListMarker(list, p, originX + pl.lineLeft(0) - style.listMarkerWidth, top + pl.baseline)
-            var g = 0
-            for (line in 0 until pl.lineCount) {
-                val lineTop = top + pl.lineTop(line)
-                val ls = pl.lineStart(line)
-                val le = pl.lineEnd(line)
-                val lastLine = line == pl.lineCount - 1
-                // Skip this line's glyphs if it is off screen, but keep g in step.
-                if (lineTop + pl.lineHeight < 0 || lineTop > viewHeight) {
-                    while (g < pl.glyphCount && pl.clusters[g] < le) g++
-                    continue
-                }
-
-                if (!sel.isCollapsed) {
-                    val s = sel.start - base
-                    val e = sel.end - base
-                    val lineLimit = if (lastLine) le + 1 else le
-                    if (e > ls && s < lineLimit) {
-                        val x0 = pl.xOf(maxOf(s, ls), line)
-                        var x1 = pl.xOf(minOf(e, le), line)
-                        if (lastLine && e > le) x1 += newlineWidth
-                        list.rect(originX + x0, lineTop, x1 - x0, pl.lineHeight, style.selectionColor)
-                    }
-                }
-
-                if (composingStart >= 0) {
-                    val s = composingStart - base
-                    val e = composingEnd - base
-                    if (e > ls && s < le) {
-                        val x0 = pl.xOf(maxOf(s, ls), line)
-                        val x1 = pl.xOf(minOf(e, le), line)
-                        val y = lineTop + pl.baseline + metrics.descent * 0.35f
-                        list.rect(originX + x0, y, x1 - x0, style.composingUnderline, style.textColor)
-                    }
-                }
-
-                // Runs of consecutive glyphs from the same font become one draw command.
-                var runFont = -1
-                var n = 0
-                while (g < pl.glyphCount && pl.clusters[g] < le) {
-                    if (pl.clusters[g] >= ls) {
-                        if (pl.fontIds[g] != runFont && n > 0) {
-                            list.glyphs(runFont, style.textSize, style.textColor, n, glyphIds, glyphXs, glyphYs)
-                            n = 0
-                        }
-                        runFont = pl.fontIds[g]
-                        if (n == glyphIds.size) growGlyphScratch()
-                        glyphIds[n] = pl.glyphs[g]
-                        glyphXs[n] = originX + pl.glyphX(g, line)
-                        glyphYs[n] = top + pl.glyphBaselineY(g, line)
-                        n++
-                    }
-                    g++
-                }
-                if (n > 0) list.glyphs(runFont, style.textSize, style.textColor, n, glyphIds, glyphXs, glyphYs)
-
-                // Underline and strikethrough, one stroke per styled stretch of the line.
-                for (r in 0 until pl.styleRunCount) {
-                    val a = maxOf(pl.styleRunStart(r), ls)
-                    val b = minOf(pl.styleRunEnd(r), le)
-                    if (a >= b) continue
-                    val x0 = originX + pl.xOf(a, line)
-                    val x1 = originX + pl.xOf(b, line)
-                    val baselineY = lineTop + pl.baseline
-                    if (pl.styleRunHas(r, CharStyle.UNDERLINE)) {
-                        list.rect(x0, baselineY + metrics.underlineOffset, x1 - x0, maxOf(1f, metrics.underlineThickness), style.textColor)
-                    }
-                    if (pl.styleRunHas(r, CharStyle.STRIKETHROUGH)) {
-                        list.rect(x0, baselineY + metrics.strikeoutOffset, x1 - x0, maxOf(1f, metrics.strikeoutThickness), style.textColor)
-                    }
-                }
-            }
+            renderParagraph(list, p, pl, top)
         }
 
+        val sel = selection
         if (focused) {
             if (sel.isCollapsed) {
                 val visible = ((now - caretEpoch) / style.blinkMs) % 2 == 0L
                 if (visible) {
                     val r = layout.caretRect(sel.focus, sel.upstream)
-                    val top = originY + r.baseline - metrics.ascent
-                    val height = metrics.ascent + metrics.descent
-                    list.rect(originX + r.x - style.caretWidth / 2, top, style.caretWidth, height, style.caretColor)
+                    val top = originY + r.baseline - r.ascent
+                    list.rect(originX + r.x - style.caretWidth / 2, top, style.caretWidth, r.ascent + r.descent, style.caretColor)
                 }
                 if (insertionHandleVisible(now)) drawHandle(list, handleAt(sel.focus, sel.upstream, 0), 0)
             } else {
@@ -923,21 +927,136 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         }
     }
 
+    private fun renderParagraph(list: DrawList, p: Int, pl: ParagraphLayout, top: Float) {
+        val sel = selection
+        val base = document.paragraphStart(p)
+        val runs = pl.runs
+        val pstyle = document.paragraphStyle(p)
+        // A ticked checklist item is struck through and faded, as in Samsung Notes.
+        val done = pstyle.list == ListType.CHECKBOX && pstyle.checked
+        drawListMarker(list, p, pstyle, originX + pl.lineLeft(0) - style.listMarkerWidth, top + pl.baseline(0), runs.sizes[0])
+
+        var g = 0
+        for (line in 0 until pl.lineCount) {
+            val lineTop = top + pl.lineTop(line)
+            val lineHeight = pl.lineHeight(line)
+            val baselineY = lineTop + pl.baseline(line)
+            val ls = pl.lineStart(line)
+            val le = pl.lineEnd(line)
+            val lastLine = line == pl.lineCount - 1
+            // Skip this line's glyphs if it is off screen, but keep g in step.
+            if (lineTop + lineHeight < 0 || lineTop > viewHeight) {
+                while (g < pl.glyphCount && pl.clusters[g] < le) g++
+                continue
+            }
+
+            // Highlight first, behind the selection and the text: the full line box with square
+            // corners, as Samsung's background colour span draws.
+            forEachRun(pl, line) { r, x0, x1 ->
+                if (runs.highlights[r] != 0) list.rect(x0, lineTop, x1 - x0, lineHeight, runs.highlights[r])
+            }
+
+            if (!sel.isCollapsed) {
+                val s = sel.start - base
+                val e = sel.end - base
+                val lineLimit = if (lastLine) le + 1 else le
+                if (e > ls && s < lineLimit) {
+                    val x0 = pl.xOf(maxOf(s, ls), line)
+                    var x1 = pl.xOf(minOf(e, le), line)
+                    if (lastLine && e > le) x1 += style.textSize * 0.3f
+                    list.rect(originX + x0, lineTop, x1 - x0, lineHeight, style.selectionColor)
+                }
+            }
+
+            // Consecutive glyphs sharing a font, size and colour become one draw command.
+            var runFont = -1
+            var runSize = 0f
+            var runColor = 0
+            var n = 0
+            var r = runs.runAt(ls)
+            while (g < pl.glyphCount && pl.clusters[g] < le) {
+                if (pl.clusters[g] >= ls) {
+                    while (r + 1 < runs.count && runs.start(r + 1) <= pl.clusters[g]) r++
+                    val size = runs.sizes[r]
+                    val color = textColor(runs.colors[r], done)
+                    if (n > 0 && (pl.fontIds[g] != runFont || size != runSize || color != runColor)) {
+                        list.glyphs(runFont, runSize, runColor, n, glyphIds, glyphXs, glyphYs)
+                        n = 0
+                    }
+                    runFont = pl.fontIds[g]
+                    runSize = size
+                    runColor = color
+                    if (n == glyphIds.size) growGlyphScratch()
+                    glyphIds[n] = pl.glyphs[g]
+                    glyphXs[n] = originX + pl.glyphX(g, line)
+                    glyphYs[n] = top + pl.glyphBaselineY(g, line)
+                    n++
+                }
+                g++
+            }
+            if (n > 0) list.glyphs(runFont, runSize, runColor, n, glyphIds, glyphXs, glyphYs)
+
+            // Underline and strikethrough, one stroke per styled stretch, sized to its text.
+            forEachRun(pl, line) { i, x0, x1 ->
+                val size = runs.sizes[i]
+                val color = textColor(runs.colors[i], done)
+                if (runs.has(i, CharStyle.UNDERLINE)) {
+                    list.rect(x0, baselineY + size * unitMetrics.underlineOffset, x1 - x0, maxOf(1f, size * unitMetrics.underlineThickness), color)
+                }
+                if (runs.has(i, CharStyle.STRIKETHROUGH) || done) {
+                    list.rect(x0, baselineY + size * unitMetrics.strikeoutOffset, x1 - x0, maxOf(1f, size * unitMetrics.strikeoutThickness), color)
+                }
+            }
+
+            if (composingStart >= 0) {
+                val s = composingStart - base
+                val e = composingEnd - base
+                if (e > ls && s < le) {
+                    val x0 = pl.xOf(maxOf(s, ls), line)
+                    val x1 = pl.xOf(minOf(e, le), line)
+                    val size = pl.sizeAtCaret(minOf(e, le))
+                    val y = baselineY + size * unitMetrics.descent * 0.35f
+                    list.rect(originX + x0, y, x1 - x0, style.composingUnderline, style.textColor)
+                }
+            }
+        }
+    }
+
+    /** Calls [block] with each style run's part of [line] and where it starts and ends on screen. */
+    private inline fun forEachRun(pl: ParagraphLayout, line: Int, block: (run: Int, x0: Float, x1: Float) -> Unit) {
+        val ls = pl.lineStart(line)
+        val le = pl.lineEnd(line)
+        var r = pl.runs.runAt(ls)
+        while (r < pl.runs.count && pl.runs.start(r) < le) {
+            val a = maxOf(pl.runs.start(r), ls)
+            val b = minOf(pl.runs.end(r), le)
+            if (a < b) block(r, originX + pl.xOf(a, line), originX + pl.xOf(b, line))
+            r++
+        }
+    }
+
+    private fun textColor(runColor: Int, done: Boolean): Int {
+        val color = if (runColor != 0) runColor else style.textColor
+        if (!done) return color
+        val alpha = ((color ushr 24) * style.checkedTextAlpha).toInt()
+        return (alpha shl 24) or (color and 0xFFFFFF)
+    }
+
     /**
-     * A bullet or a number in the hanging space before a list paragraph's first line, which
-     * travels with the line when it is centred or right-aligned. Numbers
-     * count the numbered paragraphs just above at the same indent, so they renumber themselves
-     * as items come and go without being stored.
+     * A bullet, number or checkbox in the hanging space before a list paragraph's first line;
+     * it travels with the line when that is centred or right-aligned, and scales with the size
+     * of the text it marks. Numbers count the numbered paragraphs just above at the same
+     * indent, so they renumber themselves as items come and go without being stored.
      */
-    private fun drawListMarker(list: DrawList, p: Int, markerLeft: Float, baselineY: Float) {
-        val ps = document.paragraphStyle(p)
-        if (ps.list == ListType.NONE) return
+    private fun drawListMarker(list: DrawList, p: Int, ps: ParagraphStyle, markerLeft: Float, baselineY: Float, size: Float) {
+        val scale = size / style.textSize
         when (ps.list) {
+            ListType.NONE -> {}
             ListType.BULLET -> {
                 // Centred on the x-height, where the strikethrough also sits.
-                val cy = baselineY + metrics.strikeoutOffset + metrics.strikeoutThickness / 2
+                val cy = baselineY + size * (unitMetrics.strikeoutOffset + unitMetrics.strikeoutThickness / 2)
                 path.reset()
-                path.circle(markerLeft + style.listMarkerWidth / 2, cy, style.bulletRadius)
+                path.circle(markerLeft + style.listMarkerWidth / 2, cy, style.bulletRadius * scale)
                 list.path(style.textColor, path)
             }
             ListType.NUMBER -> {
@@ -949,7 +1068,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                     if (qs.indent == ps.indent) number++
                     q--
                 }
-                val run = layout.markerRun("$number.")
+                val run = layout.markerRun("$number.", size)
                 var width = 0f
                 for (i in 0 until run.count) width += run.advances[i]
                 // Right-aligned against the text, like a numbered list in any word processor.
@@ -961,10 +1080,87 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                     glyphYs[i] = baselineY + run.offsetsY[i]
                     x += run.advances[i]
                 }
-                list.glyphs(run.fontIds.firstOrNull() ?: return, style.textSize, style.textColor, run.count, glyphIds, glyphXs, glyphYs)
+                if (run.count > 0) list.glyphs(run.fontIds[0], size, style.textColor, run.count, glyphIds, glyphXs, glyphYs)
             }
-            ListType.NONE -> {}
+            ListType.CHECKBOX -> drawCheckbox(list, checkboxBox(markerLeft, baselineY, size), ps.checked)
         }
+    }
+
+    /** The checkbox square for a list item, as left, top, side. */
+    private fun checkboxBox(markerLeft: Float, baselineY: Float, size: Float): FloatArray {
+        val side = style.checkboxSize * size / style.textSize
+        // Centred on the x-height, like the bullet.
+        val cy = baselineY + size * (unitMetrics.strikeoutOffset + unitMetrics.strikeoutThickness / 2)
+        val left = markerLeft + (style.listMarkerWidth - side) / 2
+        return floatArrayOf(left, cy - side / 2, side)
+    }
+
+    private fun drawCheckbox(list: DrawList, box: FloatArray, checked: Boolean) {
+        val (left, top, side) = Triple(box[0], box[1], box[2])
+        val scale = side / style.checkboxSize
+        val radius = style.checkboxRadius * scale
+        val stroke = style.checkboxStroke * scale
+        // An outlined square: the outer rounded square, and the inner one wound the other way
+        // so it cuts a hole. The stroke is centred on the square's edge, as in a vector icon.
+        val half = stroke / 2
+        path.reset()
+        roundRectInto(left - half, top - half, side + stroke, side + stroke, radius + half, clockwise = true)
+        roundRectInto(left + half, top + half, side - stroke, side - stroke, maxOf(0f, radius - half), clockwise = false)
+        list.path(style.checkboxColor, path)
+        if (checked) {
+            path.reset()
+            tick(left, top, side, stroke)
+            list.path(style.checkboxColor, path)
+        }
+    }
+
+    private fun roundRect(left: Float, top: Float, w: Float, h: Float, r: Float) {
+        path.reset()
+        roundRectInto(left, top, w, h, r, clockwise = true)
+    }
+
+    private fun roundRectInto(left: Float, top: Float, w: Float, h: Float, r: Float, clockwise: Boolean) {
+        val right = left + w
+        val bottom = top + h
+        if (clockwise) {
+            path.moveTo(left + r, top)
+            path.lineTo(right - r, top); path.quadTo(right, top, right, top + r)
+            path.lineTo(right, bottom - r); path.quadTo(right, bottom, right - r, bottom)
+            path.lineTo(left + r, bottom); path.quadTo(left, bottom, left, bottom - r)
+            path.lineTo(left, top + r); path.quadTo(left, top, left + r, top)
+        } else {
+            path.moveTo(left + r, top)
+            path.quadTo(left, top, left, top + r); path.lineTo(left, bottom - r)
+            path.quadTo(left, bottom, left + r, bottom); path.lineTo(right - r, bottom)
+            path.quadTo(right, bottom, right, bottom - r); path.lineTo(right, top + r)
+            path.quadTo(right, top, right - r, top); path.lineTo(left + r, top)
+        }
+        path.close()
+    }
+
+    /** A check mark through the same points as Samsung's, as fractions of the box. */
+    private fun tick(left: Float, top: Float, side: Float, thickness: Float) {
+        fun x(f: Float) = left + side * f
+        fun y(f: Float) = top + side * f
+        val h = thickness / 2
+        // Two thick segments, each a quadrilateral, wound the same way so their overlap stays solid.
+        segment(x(0.234f), y(0.450f), x(0.430f), y(0.647f), h)
+        segment(x(0.430f), y(0.647f), x(0.766f), y(0.346f), h)
+    }
+
+    private fun segment(x0: Float, y0: Float, x1: Float, y1: Float, half: Float) {
+        val dx = x1 - x0
+        val dy = y1 - y0
+        val len = kotlin.math.sqrt(dx * dx + dy * dy)
+        val nx = -dy / len * half
+        val ny = dx / len * half
+        val ex = dx / len * half
+        val ey = dy / len * half
+        path.moveTo(x0 - ex + nx, y0 - ey + ny)
+        path.lineTo(x1 + ex + nx, y1 + ey + ny)
+        path.lineTo(x1 + ex - nx, y1 + ey - ny)
+        path.lineTo(x0 - ex - nx, y0 - ey - ny)
+        path.close()
     }
 
     private fun growGlyphScratch() {

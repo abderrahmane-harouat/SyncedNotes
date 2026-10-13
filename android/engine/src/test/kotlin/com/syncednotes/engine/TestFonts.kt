@@ -43,7 +43,7 @@ class RecordingHost : ComposerHost {
 
 /** A phone-sized editor at density 2.625 (420 dpi), the emulator's. */
 fun newComposer(host: RecordingHost = RecordingHost(), width: Int = 1080, height: Int = 1700): Composer {
-    val c = Composer(TestFonts.family, EditorStyle.samsungLike(2.625f), host)
+    val c = Composer(TestFonts.family, EditorStyle.samsungLike(2.625f, 1080), host)
     c.setViewport(width, height, 0f, 0f)
     return c
 }

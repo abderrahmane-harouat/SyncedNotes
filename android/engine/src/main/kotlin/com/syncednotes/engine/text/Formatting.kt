@@ -3,7 +3,7 @@ package com.syncednotes.engine.text
 /** Character styles that are either on or off for each character, like Samsung's B/I/U/S. */
 enum class CharStyle { BOLD, ITALIC, UNDERLINE, STRIKETHROUGH }
 
-enum class ListType { NONE, BULLET, NUMBER }
+enum class ListType { NONE, BULLET, NUMBER, CHECKBOX }
 
 enum class Alignment { LEFT, CENTER, RIGHT }
 
@@ -12,6 +12,8 @@ data class ParagraphStyle(
     val list: ListType = ListType.NONE,
     val alignment: Alignment = Alignment.LEFT,
     val indent: Int = 0,
+    /** Only meaningful for a checklist item. */
+    val checked: Boolean = false,
 ) {
     companion object {
         val DEFAULT = ParagraphStyle()
@@ -184,5 +186,6 @@ class RangeSet private constructor(private var bounds: IntArray, private var siz
 /** The formatting of a whole document at one moment, for undo. */
 class FormatSnapshot(
     internal val styles: Map<CharStyle, RangeSet>,
+    internal val values: Map<ValueStyle, ValueRanges>,
     internal val paragraphs: List<ParagraphStyle>,
 )

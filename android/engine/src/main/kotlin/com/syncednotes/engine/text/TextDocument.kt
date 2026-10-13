@@ -41,6 +41,7 @@ class TextDocument {
     private val listeners = ArrayList<(TextChange) -> Unit>()
     private val formatListeners = ArrayList<(Int, Int) -> Unit>()
     private var styles = CharStyle.entries.associateWith { RangeSet() }
+    private var values = ValueStyle.entries.associateWith { ValueRanges() }
     private var paragraphStyles = arrayListOf(ParagraphStyle.DEFAULT)
 
     val text: CharSequence get() = buffer
@@ -89,6 +90,24 @@ class TextDocument {
         if (set != before) formatChanged(paragraphAt(start), paragraphAt(end))
     }
 
+    fun valueRanges(style: ValueStyle): ValueRanges = values.getValue(style)
+
+    fun valueAt(style: ValueStyle, offset: Int): Int? = values.getValue(style).valueAt(offset)
+
+    fun valueAtCaret(style: ValueStyle, offset: Int): Int? = values.getValue(style).valueAtCaret(offset)
+
+    /** The value all of [start, end) shares, null for the default, or [ValueRanges.MIXED]. */
+    fun uniformValue(style: ValueStyle, start: Int, end: Int): Int? = values.getValue(style).uniformValue(start, end)
+
+    /** Gives [start, end) the [value]; null puts back the default. */
+    fun setValue(style: ValueStyle, value: Int?, start: Int, end: Int) {
+        if (start >= end) return
+        val ranges = values.getValue(style)
+        val before = ranges.copy()
+        ranges.set(start, end, value)
+        if (ranges != before) formatChanged(paragraphAt(start), paragraphAt(end))
+    }
+
     // --- Paragraph styles ---
 
     fun paragraphStyle(index: Int): ParagraphStyle = paragraphStyles[index]
@@ -101,7 +120,8 @@ class TextDocument {
 
     // --- Undo support ---
 
-    fun snapshot(): FormatSnapshot = FormatSnapshot(styles.mapValues { it.value.copy() }, ArrayList(paragraphStyles))
+    fun snapshot(): FormatSnapshot =
+        FormatSnapshot(styles.mapValues { it.value.copy() }, values.mapValues { it.value.copy() }, ArrayList(paragraphStyles))
 
     /**
      * Puts formatting back to [snapshot], which must have been taken when the text was what it
@@ -123,7 +143,14 @@ class TextDocument {
                 last = maxOf(last, paragraphAt(r.last))
             }
         }
+        for ((style, ranges) in snapshot.values) {
+            for (r in values.getValue(style).differences(ranges)) {
+                first = minOf(first, paragraphAt(r.first))
+                last = maxOf(last, paragraphAt(r.last))
+            }
+        }
         styles = snapshot.styles.mapValues { it.value.copy() }
+        values = snapshot.values.mapValues { it.value.copy() }
         paragraphStyles = ArrayList(snapshot.paragraphs)
         if (last >= 0) formatChanged(first, last)
     }
@@ -152,9 +179,9 @@ class TextDocument {
         val removed = buffer.substring(start, end)
         val insertedText = inserted.toString()
         // Text typed over a selection takes the style of the first character it replaces.
-        val replacedStyles = if (removed.isNotEmpty() && insertedText.isNotEmpty()) {
-            CharStyle.entries.filter { styles.getValue(it).contains(start) }
-        } else null
+        val replacing = removed.isNotEmpty() && insertedText.isNotEmpty()
+        val replacedStyles = if (replacing) CharStyle.entries.filter { styles.getValue(it).contains(start) } else null
+        val replacedValues = if (replacing) ValueStyle.entries.associateWith { values.getValue(it).valueAt(start) } else null
         buffer.replace(start, end, insertedText)
         for ((style, set) in styles) {
             set.onReplace(start, removed.length, insertedText.length)
@@ -162,6 +189,10 @@ class TextDocument {
                 if (style in replacedStyles) set.add(start, start + insertedText.length)
                 else set.remove(start, start + insertedText.length)
             }
+        }
+        for ((style, ranges) in values) {
+            ranges.onReplace(start, removed.length, insertedText.length)
+            if (replacedValues != null) ranges.set(start, start + insertedText.length, replacedValues[style])
         }
 
         // Starts in (start, end] followed a removed '\n'; starts after `end` shift; each new
@@ -185,7 +216,9 @@ class TextDocument {
         // paragraphs joined by deleting a '\n' take the style of the first.
         val kept = paragraphStyles[firstParagraph]
         for (i in lastParagraph downTo firstParagraph + 1) paragraphStyles.removeAt(i)
-        for (i in newStarts.indices) paragraphStyles.add(firstParagraph + 1, kept)
+        // A new checklist item starts unchecked, whatever the one it was split from.
+        val continued = if (kept.checked) kept.copy(checked = false) else kept
+        for (i in newStarts.indices) paragraphStyles.add(firstParagraph + 1, continued)
 
         val change = TextChange(start, removed, insertedText, firstParagraph, lastParagraph - firstParagraph + 1, newStarts.size + 1)
         for (l in listeners) l(change)

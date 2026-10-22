@@ -6,6 +6,11 @@ pluginManagement {
     }
 }
 
+plugins {
+    // Fetches the JDK the app is packaged with (see app/build.gradle.kts) when it is missing.
+    id("org.gradle.toolchains.foojay-resolver-convention") version "1.0.0"
+}
+
 dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {

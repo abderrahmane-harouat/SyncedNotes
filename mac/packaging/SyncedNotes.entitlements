@@ -1,0 +1,13 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The whole list of what the app may do beyond its own sandbox folder. See Privacy.md. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<!-- Files the user picks in a Save or Open dialog, for backups. No other files, and no
+	     network: nothing can leave the Mac through this app. -->
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+</dict>
+</plist>

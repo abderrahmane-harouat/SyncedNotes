@@ -57,7 +57,8 @@ class NoteStore(folder: File, val vault: Vault) : AutoCloseable {
     /** A note in a backup's terms: everything about it but its content. */
     data class Entry(val id: Id, val created: Instant, val updated: Instant, val trashed: Instant?, val folder: Id?)
 
-    class StoreException(val reason: Reason) : Exception(reason.name) {
+    class StoreException(val reason: Reason, cause: Throwable? = null) :
+        Exception(if (cause == null) reason.name else "${reason.name}: ${cause.message}", cause) {
         enum class Reason {
             /** The database would not open with this vault's key: another vault's, or damaged. */
             CANNOT_OPEN,
@@ -75,8 +76,8 @@ class NoteStore(folder: File, val vault: Vault) : AutoCloseable {
             // SQLCipher only finds out the key is wrong on the first read.
             it.createStatement().use { s -> s.executeQuery("SELECT count(*) FROM sqlite_master").use { r -> r.next() } }
         }
-    } catch (_: SQLException) {
-        throw StoreException(StoreException.Reason.CANNOT_OPEN)
+    } catch (e: SQLException) {
+        throw StoreException(StoreException.Reason.CANNOT_OPEN, e)
     }
 
     init {

@@ -5,14 +5,21 @@ import com.syncednotes.engine.layout.ParagraphLayout
 import com.syncednotes.engine.render.DrawList
 import com.syncednotes.engine.render.FontFamily
 import com.syncednotes.engine.render.PathBuilder
+import com.syncednotes.engine.layout.roleScale
 import com.syncednotes.engine.text.Alignment
 import com.syncednotes.engine.text.Boundaries
 import com.syncednotes.engine.text.CharStyle
+import com.syncednotes.engine.text.Direction
+import com.syncednotes.engine.text.ListKind
+import com.syncednotes.engine.text.ListLevel
 import com.syncednotes.engine.text.ListType
 import com.syncednotes.engine.text.ParagraphStyle
+import com.syncednotes.engine.text.Role
 import com.syncednotes.engine.text.TextDocument
 import com.syncednotes.engine.text.ValueRanges
 import com.syncednotes.engine.text.ValueStyle
+import com.syncednotes.engine.text.relativeSize
+import com.syncednotes.engine.text.sizeValue
 import kotlin.math.abs
 import kotlin.math.exp
 import kotlin.math.hypot
@@ -28,7 +35,10 @@ import kotlin.math.sqrt
  */
 class Composer(fonts: FontFamily, val style: EditorStyle, private val host: ComposerHost) {
     val document = TextDocument()
-    private val layout = DocumentLayout(document, fonts, style.sizeUnit, style.defaultSize, style.lineSpacing, style.indentWidth, style.listMarkerWidth)
+    private val layout = DocumentLayout(
+        document, fonts, style.sizeUnit, style.defaultSize, style.lineSpacing, style.indentWidth, style.listMarkerWidth,
+        style.quoteIndent, style.codeIndent,
+    )
     private val history = History(document.snapshot())
     /** Font metrics for 1px text; multiplied by each run's size where it is drawn. */
     private val unitMetrics = fonts.regular.primary.metrics(1f)
@@ -105,6 +115,30 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val visibleBottom = viewHeight - insetBottom - margin
         if (top < visibleTop) scrollTo(scrollY - (visibleTop - top))
         else if (bottom > visibleBottom) scrollTo(scrollY + (bottom - visibleBottom))
+    }
+
+    // --- Loading --------------------------------------------------------------------------
+
+    /**
+     * Replaces the whole document with a note read from storage: [fill] writes its text and
+     * formatting into the emptied document. That is the starting point, so nothing before it
+     * can be undone, and the caret goes to the start of the note.
+     */
+    fun load(fill: (TextDocument) -> Unit) {
+        clearComposing()
+        typingStyle.clear()
+        typingValues.clear()
+        document.replace(0, document.length, "")
+        document.setParagraphStyle(0, ParagraphStyle.DEFAULT)
+        fill(document)
+        history.reset(document.snapshot())
+        selection = Selection(0)
+        scrollY = 0f
+        goalX = Float.NaN
+        mouseDrag = MouseDrag.NONE
+        host.textChangedOutsideInput()
+        reportSelection()
+        host.requestFrame()
     }
 
     // --- Editing core ---------------------------------------------------------------------
@@ -393,7 +427,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val strikethrough: Boolean,
         /** NONE also when the paragraphs disagree. */
         val list: ListType,
-        /** Null when the paragraphs disagree. */
+        /** Null when the paragraphs disagree. Never NATURAL: the side it comes out on. */
         val alignment: Alignment?,
         val canIndent: Boolean,
         val canOutdent: Boolean,
@@ -406,12 +440,16 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         /** Size in Samsung's units; null when the selection mixes sizes, which leaves the label blank. */
         val size: Int?,
         val checked: Boolean,
+        val code: Boolean = false,
+        /** Null when the paragraphs disagree. */
+        val role: Role? = Role.BODY,
     ) {
         fun has(style: CharStyle): Boolean = when (style) {
             CharStyle.BOLD -> bold
             CharStyle.ITALIC -> italic
             CharStyle.UNDERLINE -> underline
             CharStyle.STRIKETHROUGH -> strikethrough
+            CharStyle.CODE -> code
         }
     }
 
@@ -425,14 +463,16 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val styles = selectedParagraphs().map { document.paragraphStyle(it) }
         val first = styles.first()
         val list = if (styles.all { it.list == first.list }) first.list else ListType.NONE
-        val alignment = if (styles.all { it.alignment == first.alignment }) first.alignment else null
+        val alignment = styles.map { shownAlignment(it) }.distinct().singleOrNull()
         // Indenting a right-aligned paragraph means nothing in a left-to-right note, so Samsung
         // disables both buttons there. Mixed levels can always move.
         val (canIndent, canOutdent) = when {
-            styles.any { it.alignment == Alignment.RIGHT } -> false to false
-            styles.any { it.indent != first.indent } -> true to true
+            styles.any { shownAlignment(it) == Alignment.RIGHT } -> false to false
+            styles.any { it.indent != first.indent || it.depth != first.depth } -> true to true
+            first.depth > 0 -> (first.depth < ParagraphStyle.MAX_LIST_DEPTH) to true
             else -> (first.indent < ParagraphStyle.MAX_INDENT) to (first.indent > 0)
         }
+        val units = style.defaultSize * roleScale(first.role)
         return FormatState(
             styleOn(CharStyle.BOLD), styleOn(CharStyle.ITALIC), styleOn(CharStyle.UNDERLINE), styleOn(CharStyle.STRIKETHROUGH),
             list, alignment, canIndent, canOutdent, history.canUndo, history.canRedo,
@@ -440,10 +480,11 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             highlight = valueOn(ValueStyle.HIGHLIGHT).takeIf { it != ValueRanges.MIXED },
             size = when (val v = valueOn(ValueStyle.SIZE)) {
                 ValueRanges.MIXED -> null
-                null -> style.defaultSize
-                else -> v
+                else -> Math.round(units * relativeSize(v))
             },
             checked = list == ListType.CHECKBOX && styles.all { it.checked },
+            code = styleOn(CharStyle.CODE),
+            role = styles.map { it.role }.distinct().singleOrNull(),
         )
     }
 
@@ -459,8 +500,24 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     /** Highlight behind the selection, or behind what is typed next; null removes it. */
     fun setHighlight(argb: Int?, now: Long) = setValue(ValueStyle.HIGHLIGHT, argb, now)
 
-    /** Text size in Samsung's units (17 is the default). */
-    fun setSize(size: Int, now: Long) = setValue(ValueStyle.SIZE, size.takeIf { it != style.defaultSize }, now)
+    /**
+     * Text size in Samsung's units (17 is body text's). Kept relative to the paragraph's normal
+     * size, as the note format records it, so a size picked in body text means the same on
+     * both devices.
+     */
+    fun setSize(size: Int, now: Long) {
+        val units = style.defaultSize * roleScale(document.paragraphStyle(document.paragraphAt(selection.start)).role)
+        setRelativeSize(size / units, now)
+    }
+
+    /** Text size as a multiple of the paragraph's normal size: the Mac's Bigger and Smaller. */
+    fun setRelativeSize(relative: Float, now: Long) = setValue(ValueStyle.SIZE, sizeValue(relative), now)
+
+    /** The relative size at the caret or of the selection; null when it is mixed. */
+    fun relativeSizeHere(): Float? {
+        val value = valueOn(ValueStyle.SIZE)
+        return if (value == ValueRanges.MIXED) null else relativeSize(value)
+    }
 
     private fun setValue(valueStyle: ValueStyle, value: Int?, now: Long) {
         val sel = selection
@@ -514,29 +571,113 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         formatEdit(now) { document.setStyle(style, turnOn, sel.start, sel.end) }
     }
 
-    /** Bullets or numbering for the selected paragraphs; choosing the current kind removes it. */
+    /**
+     * Bullets, dashes, numbering or a checklist for the selected paragraphs; choosing the kind
+     * they all have already takes it away. Paragraphs become items of one list, and of the list
+     * just above when that is the same kind at the same level, so its numbering runs on.
+     */
     fun toggleList(type: ListType, now: Long) {
         val range = selectedParagraphs()
         val allAlready = range.all { document.paragraphStyle(it).list == type }
         val target = if (allAlready) ListType.NONE else type
-        formatEdit(now) { for (p in range) document.setParagraphStyle(p, document.paragraphStyle(p).copy(list = target)) }
+        formatEdit(now) {
+            when (target) {
+                ListType.NONE -> for (p in range) document.setParagraphStyle(p, withoutList(document.paragraphStyle(p)))
+                ListType.CHECKBOX -> for (p in range) {
+                    document.setParagraphStyle(p, document.paragraphStyle(p).copy(role = Role.CHECKLIST, lists = emptyList(), checked = false))
+                }
+                else -> {
+                    val kind = when (target) {
+                        ListType.DASH -> ListKind.DASH
+                        ListType.NUMBER -> ListKind.NUMBER
+                        else -> ListKind.BULLET
+                    }
+                    val first = document.paragraphStyle(range.first)
+                    val level = maxOf(first.depth, 1)
+                    val above = if (range.first > 0) document.paragraphStyle(range.first - 1).lists else emptyList()
+                    val joined = above.getOrNull(level - 1)?.takeIf { it.kind == kind && above.size >= level }
+                    val list = joined ?: ListLevel(kind, newListId())
+                    for (p in range) {
+                        val s = document.paragraphStyle(p)
+                        val role = if (s.role == Role.CHECKLIST || s.role == Role.DIVIDER) Role.BODY else s.role
+                        val lists = if (s.lists.isEmpty()) listOf(list) else s.lists.dropLast(1) + list
+                        document.setParagraphStyle(p, s.copy(role = role, lists = lists, checked = false))
+                    }
+                }
+            }
+        }
+    }
+
+    /** A list ID no paragraph uses yet. */
+    private fun newListId(): Int {
+        var max = 0
+        for (p in 0 until document.paragraphCount) for (l in document.paragraphStyle(p).lists) max = maxOf(max, l.id)
+        return max + 1
+    }
+
+    private fun withoutList(s: ParagraphStyle): ParagraphStyle =
+        s.copy(role = if (s.role == Role.CHECKLIST) Role.BODY else s.role, lists = emptyList(), checked = false)
+
+    /**
+     * Title, heading, subheading, body, quote or code block for the selected paragraphs;
+     * choosing the role they all have already puts them back to body text.
+     */
+    fun toggleRole(role: Role, now: Long) {
+        val range = selectedParagraphs()
+        val target = if (role != Role.BODY && range.all { document.paragraphStyle(it).role == role }) Role.BODY else role
+        formatEdit(now) {
+            for (p in range) {
+                val s = document.paragraphStyle(p)
+                // A checklist item made a heading stops being an item; a list item keeps its list.
+                document.setParagraphStyle(p, s.copy(role = target, checked = s.checked && target == Role.CHECKLIST))
+            }
+        }
     }
 
     fun setAlignment(alignment: Alignment, now: Long) {
         formatEdit(now) { for (p in selectedParagraphs()) document.setParagraphStyle(p, document.paragraphStyle(p).copy(alignment = alignment)) }
     }
 
+    /** Line height as a multiple of normal (1, 1.15, 1.5, 2) for the selected paragraphs. */
+    fun setLineSpacing(multiple: Float, now: Long) {
+        val stored = if (multiple == 1f) 0f else multiple
+        formatEdit(now) { for (p in selectedParagraphs()) document.setParagraphStyle(p, document.paragraphStyle(p).copy(lineSpacing = stored)) }
+    }
+
+    /** The side a paragraph's lines come out on. */
+    private fun shownAlignment(s: ParagraphStyle): Alignment = when (s.alignment) {
+        Alignment.NATURAL -> if (s.direction == Direction.RIGHT_TO_LEFT) Alignment.RIGHT else Alignment.LEFT
+        else -> s.alignment
+    }
+
     fun indent(now: Long) = changeIndent(+1, now)
 
     fun outdent(now: Long) = changeIndent(-1, now)
 
+    /**
+     * A list item moves a level deeper or shallower in its list; anything else moves by an
+     * indent step. A nested item joins the list the item above already started at that
+     * level, so its numbering runs on.
+     */
     private fun changeIndent(by: Int, now: Long) {
         formatEdit(now) {
             for (p in selectedParagraphs()) {
                 val s = document.paragraphStyle(p)
-                document.setParagraphStyle(p, s.copy(indent = (s.indent + by).coerceIn(0, ParagraphStyle.MAX_INDENT)))
+                val next = when {
+                    s.depth > 0 && by > 0 && s.depth < ParagraphStyle.MAX_LIST_DEPTH -> s.copy(lists = s.lists + nestedLevel(p, s))
+                    s.depth > 1 && by < 0 -> s.copy(lists = s.lists.dropLast(1))
+                    s.depth > 0 && by > 0 -> s
+                    else -> s.copy(indent = (s.indent + by).coerceIn(0, ParagraphStyle.MAX_INDENT))
+                }
+                document.setParagraphStyle(p, next)
             }
         }
+    }
+
+    private fun nestedLevel(p: Int, s: ParagraphStyle): ListLevel {
+        val above = if (p > 0) document.paragraphStyle(p - 1).lists else emptyList()
+        if (above.size > s.depth && above.subList(0, s.depth) == s.lists) return above[s.depth]
+        return ListLevel(s.lists.last().kind, newListId())
     }
 
     /** Paragraphs the selection touches; a selection ending right at a paragraph's start leaves that one out. */
@@ -563,22 +704,26 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     }
 
     /**
-     * Enter on an empty bullet or numbered line ends the list instead of adding a line, and on
-     * an empty indented line steps back out, as in Samsung Notes.
+     * Enter on an empty list item steps it out a level, and out of the list at the top level,
+     * instead of adding a line; on an empty indented line it steps back out, as in Samsung
+     * Notes and Apple Notes.
      */
     private fun leaveEmptyListItem(now: Long): Boolean {
         val sel = selection
         if (!sel.isCollapsed) return false
         val p = document.paragraphAt(sel.start)
         if (document.paragraphStart(p) != document.paragraphEnd(p)) return false
-        val s = document.paragraphStyle(p)
-        val next = when {
-            s.list != ListType.NONE -> s.copy(list = ListType.NONE)
-            s.indent > 0 -> s.copy(indent = s.indent - 1)
-            else -> return false
-        }
+        val next = stepOut(document.paragraphStyle(p)) ?: return false
         formatEdit(now) { document.setParagraphStyle(p, next) }
         return true
+    }
+
+    /** One step out of whatever marks the paragraph: a list level, a checklist, an indent. */
+    private fun stepOut(s: ParagraphStyle): ParagraphStyle? = when {
+        s.depth > 1 -> s.copy(lists = s.lists.dropLast(1))
+        s.list != ListType.NONE -> withoutList(s)
+        s.indent > 0 -> s.copy(indent = s.indent - 1)
+        else -> null
     }
 
     /**
@@ -590,12 +735,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         if (!sel.isCollapsed) return false
         val p = document.paragraphAt(sel.start)
         if (document.paragraphStart(p) != sel.start) return false
-        val s = document.paragraphStyle(p)
-        val next = when {
-            s.list != ListType.NONE -> s.copy(list = ListType.NONE)
-            s.indent > 0 -> s.copy(indent = s.indent - 1)
-            else -> return false
-        }
+        val next = stepOut(document.paragraphStyle(p)) ?: return false
         formatEdit(now) { document.setParagraphStyle(p, next) }
         return true
     }
@@ -1033,6 +1173,8 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val pstyle = document.paragraphStyle(p)
         // A ticked checklist item is struck through and faded, as in Samsung Notes.
         val done = pstyle.list == ListType.CHECKBOX && pstyle.checked
+        drawBlock(list, p, pstyle, pl, top)
+        if (pstyle.role == Role.DIVIDER) return
         drawListMarker(list, p, pstyle, originX + pl.lineLeft(0) - style.listMarkerWidth, top + pl.baseline(0), runs.sizes[0])
 
         var g = 0
@@ -1142,32 +1284,71 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     }
 
     /**
-     * A bullet, number or checkbox in the hanging space before a list paragraph's first line;
-     * it travels with the line when that is centred or right-aligned, and scales with the size
-     * of the text it marks. Numbers count the numbered paragraphs just above at the same
-     * indent, so they renumber themselves as items come and go without being stored.
+     * What a paragraph's role draws besides its text: the bar beside a quote, the panel behind
+     * a code block (one panel for consecutive code paragraphs, rounded at its two ends), the
+     * line of a divider.
+     */
+    private fun drawBlock(list: DrawList, p: Int, ps: ParagraphStyle, pl: ParagraphLayout, top: Float) {
+        when (ps.role) {
+            Role.QUOTE -> if (style.quoteBarWidth > 0f) {
+                val x = originX + pl.textLeft - style.quoteIndent
+                list.rect(x, top, style.quoteBarWidth, pl.height, style.quoteBarColor)
+            }
+            Role.CODE_BLOCK -> {
+                val left = originX + pl.textLeft - style.codeIndent
+                val right = originX + layout.width
+                val roundTop = p == 0 || document.paragraphStyle(p - 1).role != Role.CODE_BLOCK
+                val roundBottom = p + 1 >= document.paragraphCount || document.paragraphStyle(p + 1).role != Role.CODE_BLOCK
+                val r = minOf(style.codeCornerRadius, pl.height / 2)
+                path.reset()
+                panelInto(left, top, right, top + pl.height, if (roundTop) r else 0f, if (roundBottom) r else 0f)
+                list.path(style.codeBackground, path)
+            }
+            Role.DIVIDER -> {
+                val y = top + pl.height / 2 - style.dividerThickness / 2
+                list.rect(originX + pl.textLeft, y, layout.width - pl.textLeft, style.dividerThickness, style.dividerColor)
+            }
+            else -> {}
+        }
+    }
+
+    /**
+     * A bullet, dash, number or checkbox in the hanging space before a list paragraph's first
+     * line; it travels with the line when that is centred or right-aligned, and scales with the
+     * size of the text it marks. Each level of nesting has its own marker, as on the Mac:
+     * ● ○ ▪ for bullets, 1. a. i. for numbers. Numbers count the items of the same list just
+     * above, so they renumber themselves as items come and go without being stored.
      */
     private fun drawListMarker(list: DrawList, p: Int, ps: ParagraphStyle, markerLeft: Float, baselineY: Float, size: Float) {
         val scale = size / style.textSize
+        // Centred on the x-height, where the strikethrough also sits.
+        val cy = baselineY + size * (unitMetrics.strikeoutOffset + unitMetrics.strikeoutThickness / 2)
+        val cx = markerLeft + style.listMarkerWidth / 2
+        val level = (ps.depth - 1).coerceAtLeast(0) % 3
         when (ps.list) {
             ListType.NONE -> {}
             ListType.BULLET -> {
-                // Centred on the x-height, where the strikethrough also sits.
-                val cy = baselineY + size * (unitMetrics.strikeoutOffset + unitMetrics.strikeoutThickness / 2)
+                val r = style.bulletRadius * scale
                 path.reset()
-                path.circle(markerLeft + style.listMarkerWidth / 2, cy, style.bulletRadius * scale)
+                when (level) {
+                    0 -> path.circle(cx, cy, r)
+                    1 -> {
+                        // A ring: the outer circle and an inner one wound the other way.
+                        path.circle(cx, cy, r)
+                        circleReversed(cx, cy, r * 0.55f)
+                    }
+                    else -> square(cx - r * 0.85f, cy - r * 0.85f, cx + r * 0.85f, cy + r * 0.85f)
+                }
                 list.path(style.textColor, path)
             }
+            ListType.DASH -> {
+                val w = style.bulletRadius * scale * 2.6f
+                val h = maxOf(1f, size * unitMetrics.strikeoutThickness)
+                list.rect(cx - w / 2, cy - h / 2, w, h, style.textColor)
+            }
             ListType.NUMBER -> {
-                var number = 1
-                var q = p - 1
-                while (q >= 0) {
-                    val qs = document.paragraphStyle(q)
-                    if (qs.list != ListType.NUMBER || qs.indent < ps.indent) break
-                    if (qs.indent == ps.indent) number++
-                    q--
-                }
-                val run = layout.markerRun("$number.", size)
+                val label = numberLabel(itemNumber(p, ps), level) + "."
+                val run = layout.markerRun(label, size)
                 var width = 0f
                 for (i in 0 until run.count) width += run.advances[i]
                 // Right-aligned against the text, like a numbered list in any word processor.
@@ -1183,6 +1364,77 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             }
             ListType.CHECKBOX -> drawCheckbox(list, checkboxBox(markerLeft, baselineY, size), ps.checked)
         }
+    }
+
+    /**
+     * The number of a numbered item: its list's start, plus the items of the same list just
+     * above at the same level. Deeper items in between do not interrupt it; anything else does.
+     */
+    internal fun itemNumber(p: Int, ps: ParagraphStyle): Int {
+        val depth = ps.depth
+        val own = ps.lists.last()
+        var number = maxOf(own.start, 1)
+        var q = p - 1
+        while (q >= 0) {
+            val qs = document.paragraphStyle(q)
+            if (qs.depth < depth || qs.lists[depth - 1].id != own.id) break
+            if (qs.depth == depth) number++
+            q--
+        }
+        return number
+    }
+
+    private fun numberLabel(n: Int, level: Int): String = when (level) {
+        1 -> letters(n)
+        2 -> roman(n)
+        else -> n.toString()
+    }
+
+    private fun letters(n: Int): String {
+        var k = n
+        val out = StringBuilder()
+        while (k > 0) {
+            k--
+            out.insert(0, 'a' + k % 26)
+            k /= 26
+        }
+        return out.toString()
+    }
+
+    private fun roman(n: Int): String {
+        if (n <= 0 || n >= 4000) return n.toString()
+        val values = intArrayOf(1000, 900, 500, 400, 100, 90, 50, 40, 10, 9, 5, 4, 1)
+        val symbols = arrayOf("m", "cm", "d", "cd", "c", "xc", "l", "xl", "x", "ix", "v", "iv", "i")
+        var k = n
+        val out = StringBuilder()
+        for (i in values.indices) while (k >= values[i]) { out.append(symbols[i]); k -= values[i] }
+        return out.toString()
+    }
+
+    /** A rectangle whose top corners are rounded by [top] and bottom corners by [bottom]. */
+    private fun panelInto(left: Float, topY: Float, right: Float, bottomY: Float, top: Float, bottom: Float) {
+        path.moveTo(left + top, topY)
+        path.lineTo(right - top, topY); path.quadTo(right, topY, right, topY + top)
+        path.lineTo(right, bottomY - bottom); path.quadTo(right, bottomY, right - bottom, bottomY)
+        path.lineTo(left + bottom, bottomY); path.quadTo(left, bottomY, left, bottomY - bottom)
+        path.lineTo(left, topY + top); path.quadTo(left, topY, left + top, topY)
+        path.close()
+    }
+
+    /** A circle wound the other way from [PathBuilder.circle], to cut a hole in one. */
+    private fun circleReversed(cx: Float, cy: Float, r: Float) {
+        val step = Math.PI / 4
+        val control = r / Math.cos(step / 2).toFloat()
+        path.moveTo(cx + r, cy)
+        for (i in 1..8) {
+            val mid = -step * (i - 0.5)
+            val end = -step * i
+            path.quadTo(
+                cx + control * Math.cos(mid).toFloat(), cy + control * Math.sin(mid).toFloat(),
+                cx + r * Math.cos(end).toFloat(), cy + r * Math.sin(end).toFloat(),
+            )
+        }
+        path.close()
     }
 
     /** The checkbox square for a list item, as left, top, side. */

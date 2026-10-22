@@ -24,6 +24,8 @@ class ParagraphLayout(
     /** Where the text starts: the indent, plus room for a bullet or number. */
     val textLeft: Float,
     val alignment: Alignment,
+    /** How far the text stops short of the right edge: a code block's inset. */
+    val textRight: Float = 0f,
 ) {
     /** caretX[i] is the x of the boundary before character i on the unbroken line. */
     private val caretX = FloatArray(text.length + 1)
@@ -34,7 +36,7 @@ class ParagraphLayout(
     /** Glyph origin x on the unbroken line. */
     private val glyphX = FloatArray(run.count)
     private val glyphY = run.offsetsY
-    private val available = (maxWidth - textLeft).coerceAtLeast(1f)
+    private val available = (maxWidth - textLeft - textRight).coerceAtLeast(1f)
     val lineStarts: IntArray
     val lineCount: Int
     val height: Float
@@ -148,7 +150,9 @@ class ParagraphLayout(
 
     /** The x where a line's text begins, after indent and alignment. */
     fun lineLeft(line: Int): Float = textLeft + when (alignment) {
-        Alignment.LEFT -> 0f
+        // Natural is left until the engine lays out right-to-left paragraphs; justified lines
+        // are set ragged for now, which shows every word without stretching the spaces.
+        Alignment.NATURAL, Alignment.LEFT, Alignment.JUSTIFIED -> 0f
         Alignment.CENTER -> ((available - lineWidth(line)) / 2f).coerceAtLeast(0f)
         Alignment.RIGHT -> (available - lineWidth(line)).coerceAtLeast(0f)
     }

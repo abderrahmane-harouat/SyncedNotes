@@ -38,6 +38,15 @@ data class EditorStyle(
     val insertionHandleMs: Long = 4000,
     /** Selection handles are for fingers; a mouse selects without them. */
     val handles: Boolean = true,
+    /** How far a quote and a code block sit in from the margin, and the code block's right inset. */
+    val quoteIndent: Float = 0f,
+    val codeIndent: Float = 0f,
+    val quoteBarWidth: Float = 0f,
+    val quoteBarColor: Int = 0x33000000,
+    val codeBackground: Int = 0x0F000000,
+    val codeCornerRadius: Float = 0f,
+    val dividerColor: Int = 0x33000000,
+    val dividerThickness: Float = 1f,
 ) {
     /** The default text size in pixels. */
     val textSize: Float get() = defaultSize * sizeUnit
@@ -87,6 +96,11 @@ data class EditorStyle(
                 checkboxColor = 0xFF252525.toInt(),
                 // Ticked items are struck through and faded to 40% (102/255).
                 checkedTextAlpha = 0.4f,
+                quoteIndent = 20f * density,
+                codeIndent = 12f * density,
+                quoteBarWidth = 3f * density,
+                codeCornerRadius = 6f * density,
+                dividerThickness = 1f * density,
             )
         }
 
@@ -116,7 +130,8 @@ data class EditorStyle(
             handleTouchRadius = 0f,
             composingUnderline = 1f * scale,
             touchSlop = 4f * scale,
-            indentWidth = 24f * scale,
+            // The Swift app's measures: 28 pt an indent step, 24 pt a list level.
+            indentWidth = 28f * scale,
             listMarkerWidth = 24f * scale,
             listMarkerGap = 6f * scale,
             bulletRadius = 2.75f * scale,
@@ -127,6 +142,15 @@ data class EditorStyle(
             checkboxColor = 0xFF8E8E93.toInt(),
             checkedTextAlpha = 0.5f,
             handles = false,
+            // A quote 20 pt in with a bar beside it, a code block 12 pt in on a panel.
+            quoteIndent = 20f * scale,
+            codeIndent = 12f * scale,
+            quoteBarWidth = 3f * scale,
+            quoteBarColor = 0x40000000,
+            codeBackground = 0x0D000000,
+            codeCornerRadius = 6f * scale,
+            dividerColor = 0x26000000,
+            dividerThickness = 1f * scale,
         )
     }
 }

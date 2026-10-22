@@ -19,6 +19,7 @@ object AppFonts {
             bold = FontStack(listOf(load("Roboto-Bold.ttf"), arabicBold)),
             italic = FontStack(listOf(load("Roboto-Italic.ttf"), arabic)),
             boldItalic = FontStack(listOf(load("Roboto-BoldItalic.ttf"), arabicBold)),
+            monospace = FontStack(listOf(load("RobotoMono-Regular.ttf"), arabic)),
         )
     }
 

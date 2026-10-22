@@ -152,7 +152,7 @@ class FormattingTest {
         c.toggle(CharStyle.UNDERLINE, 20)
         c.setAlignment(Alignment.CENTER, 30)
         c.undo(40)
-        assertEquals(Alignment.LEFT, c.document.paragraphStyle(0).alignment)
+        assertEquals(Alignment.NATURAL, c.document.paragraphStyle(0).alignment)
         assertTrue(c.document.hasStyle(CharStyle.UNDERLINE, 0))
         c.undo(50)
         assertFalse(c.document.hasStyle(CharStyle.UNDERLINE, 0))
@@ -166,7 +166,7 @@ class FormattingTest {
         c.setAlignment(Alignment.CENTER, 3000)
         c.setAlignment(Alignment.CENTER, 4000)
         c.undo(5000)
-        assertEquals(Alignment.LEFT, c.document.paragraphStyle(0).alignment)
+        assertEquals(Alignment.NATURAL, c.document.paragraphStyle(0).alignment)
         assertEquals("text", c.document.toString())
     }
 

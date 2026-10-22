@@ -1,24 +1,74 @@
 package com.syncednotes.engine.text
 
-/** Character styles that are either on or off for each character, like Samsung's B/I/U/S. */
-enum class CharStyle { BOLD, ITALIC, UNDERLINE, STRIKETHROUGH }
+/**
+ * Character styles that are either on or off for each character, like Samsung's B/I/U/S, and
+ * inline code, which the Mac's notes have.
+ */
+enum class CharStyle { BOLD, ITALIC, UNDERLINE, STRIKETHROUGH, CODE }
 
-enum class ListType { NONE, BULLET, NUMBER, CHECKBOX }
+/**
+ * The marker a paragraph shows, worked out from its [ParagraphStyle]: what a toolbar button
+ * reflects. A checklist is a role in the note format, and the others are the innermost list.
+ */
+enum class ListType { NONE, BULLET, DASH, NUMBER, CHECKBOX }
 
-enum class Alignment { LEFT, CENTER, RIGHT }
+/** NATURAL follows the paragraph's writing direction: left for English, right for Arabic. */
+enum class Alignment { NATURAL, LEFT, CENTER, RIGHT, JUSTIFIED }
 
-/** What a paragraph carries as a whole: Samsung keeps these by paragraph, not by character. */
+enum class Direction { NATURAL, LEFT_TO_RIGHT, RIGHT_TO_LEFT }
+
+/**
+ * What a paragraph is, as the note format (note.proto) records it: meaning, never looks. A
+ * title is drawn large and bold because it is a title; nothing about its font is stored.
+ */
+enum class Role { BODY, TITLE, HEADING, SUBHEADING, QUOTE, CODE_BLOCK, CHECKLIST, DIVIDER }
+
+enum class ListKind { BULLET, DASH, NUMBER }
+
+/**
+ * One list a paragraph is an item of. Paragraphs next to each other with the same [id] at a
+ * level are items of one list, so its numbering runs on; a different id starts a new list.
+ * [start] is the number a numbered list starts at, 0 meaning 1.
+ */
+data class ListLevel(val kind: ListKind, val id: Int, val start: Int = 0)
+
+/**
+ * What a paragraph carries as a whole, field for field the note format's Paragraph, so a note
+ * read into the engine is saved back exactly as it was.
+ */
 data class ParagraphStyle(
-    val list: ListType = ListType.NONE,
-    val alignment: Alignment = Alignment.LEFT,
+    val role: Role = Role.BODY,
+    /** The lists this paragraph is an item of, outermost first; empty when it is in none. */
+    val lists: List<ListLevel> = emptyList(),
+    val alignment: Alignment = Alignment.NATURAL,
+    val direction: Direction = Direction.NATURAL,
+    /** Indent steps the user added, beyond what the role or the lists bring. */
     val indent: Int = 0,
+    /** Line height as a multiple of normal; 0 means normal. */
+    val lineSpacing: Float = 0f,
     /** Only meaningful for a checklist item. */
     val checked: Boolean = false,
 ) {
+    val list: ListType
+        get() = when {
+            role == Role.CHECKLIST -> ListType.CHECKBOX
+            lists.isEmpty() -> ListType.NONE
+            else -> when (lists.last().kind) {
+                ListKind.BULLET -> ListType.BULLET
+                ListKind.DASH -> ListType.DASH
+                ListKind.NUMBER -> ListType.NUMBER
+            }
+        }
+
+    /** How deeply the paragraph sits in lists. */
+    val depth: Int get() = lists.size
+
     companion object {
         val DEFAULT = ParagraphStyle()
         // Samsung clamps indent levels to 0..16.
         const val MAX_INDENT = 16
+        /** As deep as the Mac app nested lists. */
+        const val MAX_LIST_DEPTH = 8
     }
 }
 

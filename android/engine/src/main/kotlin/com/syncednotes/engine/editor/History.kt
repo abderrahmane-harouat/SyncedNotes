@@ -39,6 +39,14 @@ class History(initialFormat: FormatSnapshot, private val limit: Int = 200) {
     val canUndo: Boolean get() = undo.isNotEmpty()
     val canRedo: Boolean get() = redo.isNotEmpty()
 
+    /** Forgets every step: [format] becomes the starting point, as for a note just opened. */
+    fun reset(format: FormatSnapshot) {
+        undo.clear()
+        redo.clear()
+        sealed = true
+        current = format
+    }
+
     /** Ends the current step: the next edit starts a new one (cursor moved, text pasted...). */
     fun seal() {
         sealed = true

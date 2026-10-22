@@ -5,10 +5,12 @@ import com.syncednotes.engine.render.FontStack
 import com.syncednotes.engine.render.ShapedRun
 import com.syncednotes.engine.render.Shaper
 import com.syncednotes.engine.text.CharStyle
-import com.syncednotes.engine.text.ListType
+import com.syncednotes.engine.text.ParagraphStyle
+import com.syncednotes.engine.text.Role
 import com.syncednotes.engine.text.TextChange
 import com.syncednotes.engine.text.TextDocument
 import com.syncednotes.engine.text.ValueStyle
+import com.syncednotes.engine.text.relativeSize
 
 /**
  * Where a caret is drawn, in document coordinates: its line, its baseline, and the height of
@@ -32,8 +34,10 @@ class DocumentLayout(
     private val lineSpacing: Float,
     /** How far each indent level moves a paragraph in. */
     private val indentWidth: Float,
-    /** The room a bullet, number or checkbox takes before the text (a hanging indent). */
+    /** The room a bullet, number or checkbox takes before the text (a hanging indent); one per list level. */
     private val listMarkerWidth: Float,
+    private val quoteIndent: Float = 0f,
+    private val codeIndent: Float = 0f,
 ) {
     private val shapers = HashMap<FontStack, Shaper>()
     private val markerRuns = HashMap<Pair<String, Float>, ShapedRun>()
@@ -57,8 +61,21 @@ class DocumentLayout(
         }
     }
 
-    /** Pixels for a size in Samsung's units; null means the default size. */
-    fun pixels(size: Int?): Float = (size ?: defaultSize) * sizeUnit
+    /** The normal text size of a paragraph with [role], in pixels. */
+    fun basePixels(role: Role): Float = defaultSize * sizeUnit * roleScale(role)
+
+    /** Where a paragraph's text starts, and how far it stops short of the right edge. */
+    fun margins(style: ParagraphStyle): Pair<Float, Float> {
+        val roleIndent = when (style.role) {
+            Role.QUOTE -> quoteIndent
+            Role.CODE_BLOCK -> codeIndent
+            // The circle's room, as a list item has its marker's.
+            Role.CHECKLIST -> listMarkerWidth
+            else -> 0f
+        }
+        val left = roleIndent + style.depth * listMarkerWidth + style.indent * indentWidth
+        return left to if (style.role == Role.CODE_BLOCK) codeIndent else 0f
+    }
 
     private fun onChange(change: TextChange) {
         repeat(change.paragraphsBefore) { paragraphs.removeAt(change.firstParagraph) }
@@ -84,7 +101,8 @@ class DocumentLayout(
         val start = document.paragraphStart(index)
         val end = document.paragraphEnd(index)
         val text = document.substring(start, end)
-        val runs = styleRuns(start, text.length)
+        val style = document.paragraphStyle(index)
+        val runs = styleRuns(start, text.length, style.role)
 
         // Shape each stretch that uses one face at one size: bold and italic are separate
         // font files, and glyph advances scale with the size.
@@ -101,15 +119,24 @@ class DocumentLayout(
             r = next
         }
 
-        val style = document.paragraphStyle(index)
-        val textLeft = style.indent * indentWidth + if (style.list != ListType.NONE) listMarkerWidth else 0f
-        val layout = ParagraphLayout(text, concatenate(parts), runs, width, ascentPerPx, descentPerPx, lineSpacing, textLeft, style.alignment)
+        val (textLeft, textRight) = margins(style)
+        val spacing = lineSpacing * (if (style.lineSpacing > 0f) style.lineSpacing else 1f)
+        val layout = ParagraphLayout(text, concatenate(parts), runs, width, ascentPerPx, descentPerPx, spacing, textLeft, style.alignment, textRight)
         paragraphs[index] = layout
         return layout
     }
 
-    /** Cuts the paragraph wherever any character style or value starts or stops. */
-    private fun styleRuns(start: Int, length: Int): StyleRuns {
+    /**
+     * Cuts the paragraph wherever any character style or value starts or stops. A title or
+     * heading is bold throughout and a code block monospaced throughout, because of what it is.
+     */
+    private fun styleRuns(start: Int, length: Int, role: Role): StyleRuns {
+        val roleFlags = when (role) {
+            Role.TITLE, Role.HEADING, Role.SUBHEADING -> 1 shl CharStyle.BOLD.ordinal
+            Role.CODE_BLOCK -> 1 shl CharStyle.CODE.ordinal
+            else -> 0
+        }
+        val base = basePixels(role)
         val cuts = sortedSetOf(0)
         fun cut(a: Int, b: Int) {
             val la = a - start
@@ -134,6 +161,7 @@ class DocumentLayout(
         val colors = IntArray(n)
         val highlights = IntArray(n)
         for (r in 0 until n) {
+            flags[r] = roleFlags
             // An empty paragraph has no characters; it takes what typing there would get.
             val empty = length == 0
             val at = start + starts[r]
@@ -141,7 +169,7 @@ class DocumentLayout(
             if (!empty) {
                 for (style in CharStyle.entries) if (document.hasStyle(style, at)) flags[r] = flags[r] or (1 shl style.ordinal)
             }
-            sizes[r] = pixels(value(ValueStyle.SIZE))
+            sizes[r] = base * relativeSize(value(ValueStyle.SIZE))
             colors[r] = value(ValueStyle.COLOR) ?: 0
             highlights[r] = value(ValueStyle.HIGHLIGHT) ?: 0
         }
@@ -151,6 +179,7 @@ class DocumentLayout(
     private fun faceOf(flags: Int): FontStack = fonts.stack(
         isBold = flags and (1 shl CharStyle.BOLD.ordinal) != 0,
         isItalic = flags and (1 shl CharStyle.ITALIC.ordinal) != 0,
+        isCode = flags and (1 shl CharStyle.CODE.ordinal) != 0,
     )
 
     private fun concatenate(parts: List<Pair<Int, ShapedRun>>): ShapedRun {
@@ -236,4 +265,15 @@ class DocumentLayout(
         val line = layout.lineOf(offset - base, upstream)
         return (base + layout.lineStart(line))..(base + layout.lineEnd(line))
     }
+}
+
+/**
+ * How much larger than body text each role is: the Swift app's 30, 24 and 19 points against
+ * its 16-point body.
+ */
+fun roleScale(role: Role): Float = when (role) {
+    Role.TITLE -> 30f / 16f
+    Role.HEADING -> 24f / 16f
+    Role.SUBHEADING -> 19f / 16f
+    else -> 1f
 }

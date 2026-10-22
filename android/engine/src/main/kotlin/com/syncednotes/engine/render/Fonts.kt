@@ -69,8 +69,11 @@ class FontFamily(
     val bold: FontStack = regular,
     val italic: FontStack = regular,
     val boldItalic: FontStack = bold,
+    /** For code, inline or a code block; the regular face until a monospaced one is given. */
+    val monospace: FontStack = regular,
 ) {
-    fun stack(isBold: Boolean, isItalic: Boolean): FontStack = when {
+    fun stack(isBold: Boolean, isItalic: Boolean, isCode: Boolean = false): FontStack = when {
+        isCode -> monospace
         isBold && isItalic -> boldItalic
         isBold -> bold
         isItalic -> italic

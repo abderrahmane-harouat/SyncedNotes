@@ -19,7 +19,9 @@ java {
 
 dependencies {
     implementation(project(":engine"))
+    implementation(project(":core"))
     implementation(compose.desktop.currentOs)
+    testImplementation(kotlin("test"))
 }
 
 val glyphsRelease = rootProject.layout.projectDirectory.dir("../android/glyphs/target/release")
@@ -40,6 +42,10 @@ compose.desktop {
             "--enable-native-access=ALL-UNNAMED",
         )
     }
+}
+
+tasks.test {
+    useJUnitPlatform()
 }
 
 // Compose makes its run task late, so reach it by type rather than by name.

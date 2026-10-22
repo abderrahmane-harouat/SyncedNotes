@@ -1,7 +1,18 @@
 package com.syncednotes.engine.text
 
-/** Character styles that carry a value: Samsung's foreground colour, background colour and size spans. */
+/**
+ * Character styles that carry a value: Samsung's foreground colour and background colour spans
+ * (0xAARRGGBB), and size. A size is relative to the paragraph's normal size, as the note format
+ * keeps it, held as the bits of a Float ([relativeSize], [sizeValue]) so that a size read from
+ * a note is written back to the last bit.
+ */
 enum class ValueStyle { COLOR, HIGHLIGHT, SIZE }
+
+/** The value [ValueStyle.SIZE] holds for [relative]; null for the normal size. */
+fun sizeValue(relative: Float): Int? = if (relative == 1f || relative <= 0f) null else java.lang.Float.floatToRawIntBits(relative)
+
+/** The relative size a [ValueStyle.SIZE] value stands for; 1 for none. */
+fun relativeSize(value: Int?): Float = if (value == null) 1f else java.lang.Float.intBitsToFloat(value)
 
 /**
  * Ranges of characters carrying a value, sorted and disjoint; neighbours with the same value

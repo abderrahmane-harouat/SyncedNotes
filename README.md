@@ -4,12 +4,19 @@
 
 # SyncedNotes
 
-Encrypted notes for the Mac, written natively in Swift. No server, no account, no cloud: your
-notes are locked with a passphrase only you know, and they never leave the Mac, not even to
-Apple.
+Encrypted notes for the Mac. No server, no account, no cloud: your notes are locked with a
+passphrase only you know, and they never leave the Mac, not even to Apple.
 
-**Version 0.1.0.** In daily use by its author; not independently reviewed. What comes next is
-in [`TODO.md`](TODO.md).
+**Version 0.2.0, being rebuilt.** Version 0.1.0 was a SwiftUI app; since 2026-10-22 the Mac
+app is built without Xcode or Swift, in Kotlin, around the same note engine as the phone
+app (`android/engine`, with its Rust half in `android/glyphs`), with the same design, the same
+encrypted storage and the same backups. The Swift sources stay in the repo until the new app
+does everything they did. Not independently reviewed. What comes next is in
+[`TODO.md`](TODO.md).
+
+Not back yet in the rebuilt app: pictures and tables (a note holding one opens read-only,
+and is never saved over), right-to-left text such as Arabic, rich copy and paste, dragging
+notes onto folders, typing `- ` or `1. ` to start a list, and the Edit menu.
 
 ## What it does
 
@@ -73,86 +80,82 @@ the Mac without any Apple account. The full rule, how each part of it is kept, a
 settings to switch off yourself are in [`Privacy.md`](Privacy.md).
 
 Your notes live in the app's own sandbox folder,
-`~/Library/Containers/com.syncednotes.mac/Data/Library/Application Support/SyncedNotes`, in a
-database locked as a whole, holding each note and picture locked again on its own
-([`Docs/LockFormat.md`](Docs/LockFormat.md) has every byte).
+`~/Library/Containers/com.syncednotes.notes/Data/Library/Application Support/SyncedNotes` (the
+Swift app's were under `com.syncednotes.mac`), in a database locked as a whole, holding each
+note and picture locked again on its own ([`Docs/LockFormat.md`](Docs/LockFormat.md) has every
+byte).
 
 ## Build and install
 
-Requires macOS 26 and Xcode 26. Open `SyncedNotes.xcodeproj` and press Run, or:
+Needs a JDK 25 or later and Rust (`cargo`), with Apple's Command Line Tools for the linker;
+no Xcode. The build fetches everything else, the JDK the app carries included.
 
 ```bash
-xcodebuild -project SyncedNotes.xcodeproj -scheme SyncedNotes -configuration Debug \
-  -derivedDataPath build build
-open build/Build/Products/Debug/SyncedNotes.app
+cd mac
+./gradlew :app:run                     # try the app on notes of its own, SyncedNotes-Try
+./gradlew :app:signApp                 # the app: mac/app/build/compose/binaries/main/app/SyncedNotes.app
 ```
 
-To try the app without touching your real notes, launch a debug build with
-`-NotesFolder SyncedNotes-Try`: it keeps its notes in a separate folder beside the real one.
+A run from the build keeps its notes in `~/Library/Application Support/SyncedNotes-Try`,
+never in the real ones. `./gradlew :app:makeTryNotes` fills that folder with made-up notes,
+and `./gradlew :app:run -PtryUnlock` opens them without typing their made-up passphrase.
 
-To install it for everyday use, build the release version, copy it to `/Applications`, and
-delete the build's copy, so there is only one SyncedNotes on the Mac:
+The installed app keeps its notes in its own sandbox folder,
+`~/Library/Containers/com.syncednotes.notes/Data/Library/Application Support/SyncedNotes`,
+apart from the Swift app's (`com.syncednotes.mac`). Notes come across through a backup:
+export one from the old app, import it in the new (File > Import Backup…).
+
+To install, quit SyncedNotes, copy the app to `/Applications`, and delete the build's copy,
+so there is only one SyncedNotes on the Mac:
 
 ```bash
-xcodebuild -project SyncedNotes.xcodeproj -scheme SyncedNotes -configuration Release \
-  -derivedDataPath build build
-ditto build/Build/Products/Release/SyncedNotes.app /Applications/SyncedNotes.app
-rm -rf build/Build/Products/Release/SyncedNotes.app
+ditto mac/app/build/compose/binaries/main/app/SyncedNotes.app /Applications/SyncedNotes.app
+rm -rf mac/app/build/compose/binaries/main/app/SyncedNotes.app
 ```
-
-Quit SyncedNotes before replacing it; it saves as it quits. The release build may use the
-sandbox, files you pick in a Save or Open dialog, and the libraries bundled inside it
-(`SyncedNotes.entitlements` says why), and unlike a debug build no debugger can attach to it
-and read unlocked notes from its memory. Both builds use the same notes.
-
-If the command-line tools rather than Xcode are the selected developer directory
-(`xcode-select -p`), put `DEVELOPER_DIR=/Applications/Xcode.app/Contents/Developer` in front of
-the commands.
 
 ## The project
 
 | | |
 |---|---|
-| `SyncedNotes/` | The app: SwiftUI windows around an AppKit text view on TextKit 2 |
-| `SyncedNotesCore/` | Everything that is not on screen, tested from the terminal: the lock, the encrypted database, folders, backups, changing the passphrase |
-| `SyncedNotesCore/Proto/note.proto` | The note format; the Swift code in `Sources/SyncedNotesCore/Generated` is made from it |
-| `SyncedNotesCore/Fixtures/` | The lock's test files, written by the lock code itself |
-| `Vendor/GRDB` | GRDB with SQLCipher, pinned and vendored (see its `VENDORED.md`) |
+| `mac/app` | The Mac app: Compose for Desktop windows around the note engine, the menus, and `KeepOnThisMac.kt` |
+| `mac/core` | Everything that is not on screen, tested from the terminal: the lock, the encrypted database, folders, backups, changing the passphrase |
+| `mac/core/Generated` | The note format's code, made from `SyncedNotesCore/Proto/note.proto` |
+| `android/engine`, `android/glyphs` | The note engine, shared with the phone app: text, layout and editing in Kotlin, fonts and drawing in Rust |
+| `android/app` | The phone app |
+| `SyncedNotesCore/Proto/note.proto` | The note format |
+| `SyncedNotesCore/Fixtures/` | The lock's test files, written by the Swift app's lock code; the Kotlin lock must open them |
+| `SyncedNotes/`, `SyncedNotesCore/`, `Vendor/GRDB` | The Swift app, kept for reference until the new one does everything it did |
 | `Docs/` | Why it is built the way it is: [`Architect.md`](Docs/Architect.md) for the app, [`LockFormat.md`](Docs/LockFormat.md) for the encryption, byte for byte |
 | `Privacy.md`, `TODO.md` | The privacy rule and how it is kept; what comes next |
-| `Design/`, `Scripts/` | The icon's artwork, and the script that makes the app icon from it |
 
-Dependencies, each pinned to one version: GRDB with SQLCipher 4.19.0 (vendored),
-swift-sodium 0.11.0 for Argon2id, and swift-protobuf 1.38.1. Encryption itself uses Apple's
-CryptoKit (AES-256-GCM, HKDF).
+Dependencies, each pinned to one version: Compose for Desktop 1.12.2, SQLite3 Multiple
+Ciphers through `io.github.willena:sqlite-jdbc` 3.53.4.0 (SQLCipher 4's format), Bouncy Castle
+1.86 for Argon2id, and protobuf-javalite 4.36.2. Encryption itself uses the JDK's AES-256-GCM
+and HKDF.
 
 ### Tests
 
 ```bash
-cd SyncedNotesCore && swift test
+cd mac && ./gradlew test
 ```
 
-67 tests: the lock, the database, backups, folders, the Trash and changing the passphrase,
-including that nothing readable reaches the disk, that a change of passphrase stopped at any
-point loses nothing, and that the committed lock test files are exactly what the lock code
-writes.
+The lock, the database, backups, folders, the Trash and changing the passphrase (`mac/core`,
+the Swift app's tests, ported), the note engine (`android/engine`), and the app: reading and
+writing notes exactly, and the window's rules on the real engine and store (`mac/app`).
 
 ### Generated files
 
 Never edited by hand. Made again with:
 
 ```bash
-# The note format's Swift code, after a change to note.proto
-# (protoc, and protoc-gen-swift 1.38.1 to match swift-protobuf):
-cd SyncedNotesCore/Proto && protoc --swift_out=../Sources/SyncedNotesCore/Generated \
-  --swift_opt=Visibility=Public note.proto
-
-# The lock's test files, only after a deliberate change to the lock format:
-cd SyncedNotesCore && swift run make-fixtures
-
-# The app icon, from Design/AppIcon-artwork.png:
-swift Scripts/make-app-icon.swift
+# The note format's Java code, after a change to note.proto (protoc 36.2, to match
+# protobuf-javalite 4.36.2):
+cd SyncedNotesCore/Proto && protoc --java_out=lite:../../mac/core/Generated note.proto
 ```
+
+The lock's test files were written by the Swift app's lock code (`swift run make-fixtures`);
+a change to the lock format is a new format version, and its test files would be written by
+the Kotlin lock.
 
 ## Roadmap
 

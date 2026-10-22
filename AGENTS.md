@@ -1,23 +1,31 @@
 # SyncedNotes
 
-Encrypted notes for the Mac, native Swift. No server, no account, no cloud. See
+Encrypted notes for the Mac, and a phone app beside it. No server, no account, no cloud. See
 [README.md](README.md) for the product and the folder.
 
 ## Stack
 
-- **Language / Runtime**: Swift 6, macOS 26
-- **Framework**: SwiftUI for the windows; AppKit's `NSTextView` on TextKit 2 for the editor
-- **Key dependencies**: GRDB with SQLCipher (vendored in `Vendor/GRDB`), swift-sodium for
-  Argon2id, swift-protobuf for the note format; CryptoKit for AES-GCM and HKDF
-- **Build**: `SyncedNotes.xcodeproj` (the app) and the Swift package `SyncedNotesCore`
+Since 2026-10-22 the Mac app is built without Xcode or Swift. The Swift app (`SyncedNotes/`,
+`SyncedNotesCore/`) stays in the repo as reference until the new one does everything it did.
+
+- **Language / Runtime**: Kotlin 2.4 on the JVM (JDK 27 to build, a Temurin 25 runtime inside
+  the app), Rust for the engine's fonts and drawing
+- **Windows**: Compose for Desktop 1.12 around the note; the note itself is the app's own
+  engine (`android/engine`, `android/glyphs`), shared with the phone app, never a text view of
+  the system's or Compose's
+- **Key dependencies**: SQLite3 Multiple Ciphers (`io.github.willena:sqlite-jdbc`, SQLCipher 4's
+  format), Bouncy Castle for Argon2id, protobuf-javalite for the note format; the JDK for
+  AES-GCM and HKDF
+- **Build**: Gradle in `mac/` (`:app`, `:core`, and `:engine` from `android/engine`)
 
 ## Commands
 
 ```bash
-xcodebuild -project SyncedNotes.xcodeproj -scheme SyncedNotes -configuration Debug -derivedDataPath build build
-cd SyncedNotesCore && swift test             # the lock, database, backups, folders, passphrase change
-cd SyncedNotesCore && swift run make-fixtures   # the lock's test files, only after a format change
-swift Scripts/make-app-icon.swift               # the app icon, from Design/AppIcon-artwork.png
+cd mac && ./gradlew test                    # the lock, store, backups, engine, app
+cd mac && ./gradlew :app:run                # the app on try-out notes, SyncedNotes-Try
+cd mac && ./gradlew :app:makeTryNotes       # made-up notes for that, then :app:run -PtryUnlock
+cd mac && ./gradlew :app:signApp            # the signed, sandboxed SyncedNotes.app
+cd SyncedNotesCore/Proto && protoc --java_out=lite:../../mac/core/Generated note.proto
 ```
 
 Installing: see the README. Keep exactly one copy of the app on the Mac,
@@ -32,18 +40,21 @@ Installing: see the README. Keep exactly one copy of the app on the Mac,
   [`Privacy.md`](Privacy.md); keep that file current whenever a change touches what the app
   shares with the system.
 - **Apple is a vendor like any other, and is not trusted.** Use only what of macOS runs on the
-  Mac alone. Every text field is the app's own (`PlainTextField`, `PlainSearchField`) or a
-  secure field, never SwiftUI's `TextField` or `.searchable`; every right-click menu offers
-  editing only; every copy is for this Mac only; no Apple framework that talks to a server.
+  Mac alone. The note is the app's own engine; the small fields (search, folder names,
+  passphrases) are Compose's, which use no text service of the system's; every right-click
+  menu offers editing only; every copy goes through `Pasteboard`, for this Mac only; no Apple
+  framework that talks to a server. Native calls go in `KeepOnThisMac.kt` and say why.
 - **The build never involves Apple's services**: signed ad-hoc on this Mac, no developer
   account, no Xcode Cloud, TestFlight, App Store or notarization.
 - **The lock format is a contract.** [`Docs/LockFormat.md`](Docs/LockFormat.md) describes it byte
   for byte; the notes on disk and every backup depend on it. A change is a new format version,
   never a silent edit.
-- **Never edit `SyncedNotesCore/Fixtures/` or `Generated/` by hand.** The lock's test files are
-  written by `swift run make-fixtures`, always to the same bytes, and a test fails if the
-  committed copies differ. The note format's code is generated from `Proto/note.proto`, whose
-  fields are only ever added under new numbers.
+- **Never edit `SyncedNotesCore/Fixtures/` or `Generated/` by hand.** The lock's test files were
+  written by the Swift app's lock code, and the Kotlin lock's tests open them as they are. The
+  note format's code is generated from `Proto/note.proto`, whose fields are only ever added
+  under new numbers.
+- **A note is saved from the engine only if it reads in and writes back exactly**
+  (`NoteFormat.canEdit`); anything the engine cannot show yet opens read-only, never saved over.
 - **A wrong key must fail loudly.** Never return partial plaintext, and never write over notes
   with something that did not authenticate.
 - **Comments say why, not what.** This codebase explains the reasoning behind a decision,
@@ -54,5 +65,5 @@ Installing: see the README. Keep exactly one copy of the app on the Mac,
   "Keep notes in folders". Not Conventional Commits.
 - **Nothing secret enters the repo.** `.snbackup` and `.snx` files and anything with a key are
   ignored by git. Test data is invented and guards nothing.
-- **Tests never touch the real notes or the real clipboard.** Use a temporary folder and a
-  private pasteboard; the editor's own Copy writes to the system clipboard.
+- **Tests never touch the real notes or the real clipboard.** Use a temporary folder and
+  `Pasteboard.private()`; a run from the build uses `SyncedNotes-Try`, never `SyncedNotes`.

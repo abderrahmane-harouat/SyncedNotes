@@ -46,21 +46,26 @@ The settings that close these are in the checklist at the end.
 
 ## Building the app
 
-Apple is kept out of the build as well:
+Apple is kept out of the build as well. Since 2026-10-22 the Mac app is built without Xcode
+or Swift (`mac/`, see the README):
 
-- **Signed on this Mac only** (ad-hoc, `CODE_SIGN_IDENTITY = "-"`): no Apple developer account,
-  team or provisioning profile, so Xcode contacts no Apple service to sign it.
+- **Signed on this Mac only** (ad-hoc, `codesign --sign -`): no Apple developer account, team
+  or provisioning profile.
 - **No Xcode Cloud, TestFlight, App Store or notarization.** Notarizing would upload the app to
   Apple; it is not done.
-- **No Apple frameworks that talk to Apple's servers**: no CloudKit, App Intents, Spotlight,
-  StoreKit, MetricKit or analytics. The app declares no Siri or Shortcuts actions.
-- **Dependencies are fetched from their own repositories** (GitHub), pinned to one version,
-  and GRDB with SQLCipher is vendored in the repo.
+- **No Apple frameworks that talk to Apple's servers.** The app reaches macOS only through
+  the few calls in `KeepOnThisMac.kt` (the Objective-C runtime and Carbon, for the protections
+  below) and Java's own AWT; no CloudKit, App Intents, Spotlight, StoreKit or analytics.
+- **Dependencies are fetched from their own repositories**, each pinned to one version: Maven
+  Central and Google's Maven for libraries, the Gradle plugin portal for build plugins, and
+  Adoptium for the JDK the app is packaged with. None of them is Apple.
 
 ## The app
 
-A native AppKit app gets many system features for free, and some work by sending what is in
-a text view to a server. That is where this could quietly change.
+The note is drawn by the app's own engine (`android/engine`, with its Rust half in
+`android/glyphs`), not by any text view of the system's: macOS gets keystrokes and shows
+pixels, and there is no text view for Writing Tools, Look Up, Services, spelling or
+autocorrect to attach to. The window around it is Compose for Desktop, on Java's AWT.
 
 Not used, ever:
 
@@ -74,65 +79,41 @@ Not used, ever:
 
 Done:
 
-- **Notes at rest are locked twice**: an SQLCipher database, locked whole, holding each note as
-  its own locked item (AES-256-GCM, key from the passphrase by Argon2id); pictures are locked
-  files with random names. See `Docs/LockFormat.md`. Checked on the raw bytes: no note
-  text, title, search word, folder name or picture content reaches the disk. Titles, search
-  words and folder names are locked once, by the database, not twice. The folder is the app's
-  own sandbox container, which iCloud does not sync.
+- **Notes at rest are locked twice**: an SQLCipher-format database (SQLite3 Multiple Ciphers
+  through `io.github.willena:sqlite-jdbc`), locked whole, holding each note as its own locked
+  item (AES-256-GCM, key from the passphrase by Argon2id); pictures are locked files with
+  random names. See `Docs/LockFormat.md`. Checked on the raw bytes by the tests: no note text,
+  title, search word, folder name or picture content reaches the disk. The folder is the
+  app's own sandbox container, which iCloud does not sync.
 - **The passphrase is never stored**, and the keys live only in memory until Lock Notes or
   quitting.
 - **Deleting a note moves it to the Trash first**, where it stays, locked like any other note,
-  for 30 days or until deleted permanently; then only an empty marker is left, so a second
-  device would learn of the deletion.
+  for 30 days or until deleted permanently; then only an empty marker is left.
 - **App Sandbox with no network**, and access only to files the user picks in a Save or Open
-  dialog (added for backups). macOS stops the app connecting anywhere, whatever the code does.
-  The hardened runtime is on, with one exception: the app may load the libraries bundled
-  inside it (SQLCipher's framework), since a locally signed app has no Team ID to match them
-  against. Planned to go once SQLCipher is compiled in from source. Sync, if it comes, adds
-  local-network access and nothing more.
-- **Backups are locked like everything else**: one sealed item, under the passphrase, with
-  nothing readable inside, not even the dates or the number of notes.
+  dialog, for backups (`mac/packaging/SyncedNotes.entitlements`). macOS stops the app
+  connecting anywhere, whatever the code does. Checked: the packaged app opens its notes
+  inside the sandbox. The libraries the app loads (the Rust engine, SQLite's) are inside the
+  app and covered by its signature: the sandbox refuses to load code the app writes itself,
+  which is what SQLite's driver would otherwise do.
+- **Backups are locked like everything else**: one sealed item, under the passphrase.
 - **Changing the passphrase leaves nothing the old one opens** on the Mac: the notes are
-  locked again into a new folder, checked, swapped in, and the old folder is deleted. Backups
-  exported before the change still open with the old passphrase; the app says so and offers to
-  export a new one.
-- **Text services are off in every place text is typed**: the note, table cells, the search
-  field, folder names, and passphrase fields, the secure ones included. Writing Tools,
-  spelling, grammar, autocorrect, completion, inline predictions, math completion, text
-  replacement, quote and dash substitution, data and link detection (`turnOffTextServices`,
-  in `KeepOnThisMac.swift`). The note's own text view sets them as it is made; a field's
-  editing component as editing starts, whoever made the field.
-- **The search field and folder names are the app's own fields** (`HardenedTextField.swift`),
-  not SwiftUI's, whose editing component cannot be changed (given another, SwiftUI crashes;
-  tried). A shown passphrase uses one too.
-- **No right-click menu offers to send text anywhere.** The note, table cells and the app's
-  fields offer editing only: Cut, Copy, Paste, Select All (and the table's commands in a cell).
-  Look Up, Translate, Search With Google, Share, Services and Writing Tools are not offered.
-- **Services get nothing.** No text view hands its text to the Services menu
-  (`validRequestor` returns nothing), and the Services menu is removed from the app menu.
-- **No Look Up gesture.** A force click or three-finger tap on text does nothing, rather than
-  looking the word up, Siri knowledge included (`quickLook(with:)`).
-- **The Edit menu has no Writing Tools, AutoFill or Start Dictation.** AppKit adds them by
-  itself; they are taken out each time it does (`KeepOnThisMac.strip`), and Dictation's menu
-  item is also switched off through AppKit's documented setting. Emoji & Symbols stays: it is
-  a local picker.
-- **Copies stay on this Mac.** Everything copied, from a note or any of the app's fields, is
-  marked for this Mac only (`currentHostOnly`), which keeps it out of Universal Clipboard. A
-  passphrase's secure field refuses to copy at all (checked). Not yet tried with a second
-  device.
-- **A shown passphrase keeps a hidden one's protections** (`PassphraseField`): the eye button
-  swaps the secure field for the app's own field, which turns secure input on itself while it
-  has focus (so other apps still cannot watch the keystrokes), offers no text service, and is
-  not marked as a password field, which would invite the Passwords app and its iCloud Keychain.
-  Secure input is turned off again exactly once, when the field loses focus or goes.
-- **Windows are kept out of screenshots and screen recording** (`sharingType = .none` on every
-  window, sheets and Settings included). The cost: the app cannot be screenshotted, and shows
-  blank in a screen share. Whether macOS honours this for every way of capturing the screen
-  has not been tested.
-- **Nothing readable is left beside the notes** (checked 2026-10-07): the app keeps no caches
-  and no saved window state; its settings file holds only window sizes and the folder the last
-  backup dialog showed.
+  locked again into a new folder, checked, swapped in, and the old folder is deleted.
+- **The small text fields** (search, folder names, passphrases) are Compose's own: they use no
+  text service of the system's, and their right-click menu offers editing only.
+- **Services get nothing.** The Services menu Java puts in the app menu is taken out, and
+  AppKit is told there is none (`KeepOnThisMac.kt`). Checked: the app menu has About, Hide,
+  Show All and Quit, nothing else. There is no Edit menu, so AppKit has nowhere to add
+  Writing Tools, AutoFill or Start Dictation.
+- **Copies stay on this Mac.** Everything copied, from a note or from a field, goes through
+  `Pasteboard`, which marks it for this Mac only (`currentHostOnly`), keeping it out of
+  Universal Clipboard; Compose's fields are given that pasteboard in place of Java's. A
+  passphrase field refuses to copy at all.
+- **Passphrase fields turn on secure input** while they have focus, shown or hidden, so other
+  apps cannot watch the keystrokes; it is turned off again exactly once (`SecureInput`).
+- **Windows are kept out of screenshots and screen recording** (`sharingType = .none`).
+  Checked: the window server reports the window as not shareable. A run from the build on
+  made-up notes may be captured, to check the app's look; the app never allows it with the
+  real notes.
 
 And:
 
@@ -141,9 +122,10 @@ And:
 
 ## Open issues
 
-- **⌃⌘D (Look Up) and other system shortcuts** were not tried by hand; the menu items and the
-  gesture are gone, but a shortcut macOS handles itself may still reach a selected word.
-- **The hardened runtime's library exception** stays until SQLCipher is compiled from source.
+- **⌃⌘D (Look Up) and other system shortcuts** were not tried by hand in the new app.
+- **The dictation key** still reaches macOS's own Dictation, which the app cannot refuse:
+  turn Dictation off (below).
+- **Windows opened after the first** (none yet) must call `keepWindowsOutOfScreenshots` too.
 
 ## Fixed
 

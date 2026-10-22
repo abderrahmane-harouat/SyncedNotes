@@ -4,6 +4,24 @@ What comes next, roughly in order of how much it matters. The rule in
 [`Privacy.md`](Privacy.md) applies to every item: nothing here may send note content off the
 Mac, or to Apple.
 
+## Rebuilding the Mac app on the note engine
+
+Until these are done, the Swift app stays in the repo and on the Mac.
+
+- [ ] **Arabic and other right-to-left text**: Arabic joining and the lam-alef ligature in the
+  Rust shaper (OpenType GSUB), marks and kerning (GPOS), and the bidirectional algorithm in the
+  engine's layout, with the caret and selection following what is on screen.
+- [ ] **Pictures and tables** in the engine, so the notes holding them can be edited; until
+  then they open read-only.
+- [ ] **Rich copy and paste** between notes, keeping formatting; plain text today.
+- [ ] Lists that start as you type: `- `, `* ` or `1. ` at the start of a line.
+- [ ] An Edit menu that acts on the note or the field that has focus.
+- [ ] Dragging notes onto folders, and columns that can be resized.
+- [ ] Input methods that compose (dead keys, Chinese and Japanese) through AWT's.
+- [ ] The app's size: about 150 MB, mostly the Java runtime and Skia; SQLite's driver and
+  Skia's jar each carry a library the app already has.
+- [ ] Import the notes from the Swift app's backup, then retire the Swift app and its sources.
+
 ## Safety of the notes
 
 - [ ] **Automatic encrypted backups**: a backup on a schedule to a folder the user picks once,

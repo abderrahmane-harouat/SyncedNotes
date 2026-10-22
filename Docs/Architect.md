@@ -2,7 +2,47 @@
 
 How SyncedNotes is built, and why.
 
-## The app is SwiftUI; the editor is AppKit
+## The Mac app since 2026-10-22: Compose around the note engine
+
+The Mac app is built without Xcode or Swift (`mac/`). Its windows are Compose for Desktop on
+the JVM; the note is drawn and edited by the app's own engine, the same one as the phone
+app's (`android/engine` in Kotlin: text, layout, selection, undo, input; `android/glyphs` in
+Rust: font parsing, shaping, rasterizing). The Mac build includes `android/engine` as a module
+of its own rather than a copy, so both apps type, select and draw the same.
+
+**The engine owns the text**, as the text view did before. The window hands it a note only
+when another is chosen (`NotesModel.showInEditor`), and reads it back only to save.
+
+**A frame is never copied on its way in.** The Rust compositor paints premultiplied RGBA,
+which is Skia's own layout, straight into the memory of the window's Skia bitmap: Java's FFM
+API turns the bitmap's address into a direct buffer for it (`PixelSurface`).
+
+**The mouse is the Mac's, not a finger's.** The engine was written for touch, where a drag
+scrolls; `Composer.onMouse` is the Mac's way: a press puts the caret down at once, a drag
+selects, the click count from the system decides words and paragraphs, and the wheel scrolls.
+
+**The engine's paragraphs are the note format's**: a role (title, heading, quote, code,
+checklist, divider), lists in levels with an ID and a start, alignment and direction, line
+spacing; sizes are relative to the role's, as stored. `NoteFormat` reads a note into the
+engine and writes it back. A note opens for editing only if that round trip gives back
+exactly the stored note (`NoteFormat.canEdit`): anything the engine does not model yet, a
+picture or a table, makes the note read-only rather than something a save would drop. Each
+text colour read is kept with its exact floats, since eight bits a channel cannot hold them.
+
+**What AppKit used to do for the privacy rule is done by hand** (`KeepOnThisMac.kt`), through
+the Objective-C runtime and Carbon over FFM, on AppKit's main thread: windows out of
+screenshots, the Services menu removed, copies for this Mac only, secure input in passphrase
+fields. Each is checked by a test or at run time; see `Privacy.md`.
+
+**Packaging.** The app carries a Temurin runtime trimmed by jlink: Homebrew's JDK links its
+font libraries to Homebrew's, outside the app, and the sandbox refuses to open them. SQLite's
+library is taken out of its driver and placed in the app beside the Rust engine, under the
+app's signature: the driver would otherwise unpack it into the sandbox's temporary folder,
+and the sandbox refuses to load code the app wrote itself.
+
+The sections below describe the Swift app, version 0.1.0, kept for what was learnt in it.
+
+## The Swift app: SwiftUI, with an AppKit editor
 
 Windows, menus, and layout are SwiftUI. The text view is AppKit's `NSTextView`, placed inside
 SwiftUI through `NSViewRepresentable`.

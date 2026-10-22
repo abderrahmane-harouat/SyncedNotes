@@ -890,6 +890,105 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         if (offset != sel.anchor) select(Selection(sel.anchor, offset), now)
     }
 
+    // --- Mouse (the Mac) -------------------------------------------------------------------
+
+    private enum class MouseDrag { NONE, CHARACTERS, WORDS, PARAGRAPHS }
+
+    private var mouseDrag = MouseDrag.NONE
+    private var mouseAnchor = 0
+
+    /**
+     * A mouse button, the Mac's way rather than a finger's: a press puts the caret under it at
+     * once, Shift extends the selection to it, and dragging selects instead of scrolling (the
+     * wheel and trackpad scroll, through [scrollBy]). [clicks] is the platform's own count, so
+     * the user's double-click speed in System Settings decides what a double click is: two
+     * select a word and keep selecting by words while dragging, three a paragraph.
+     */
+    fun onMouse(action: PointerAction, x: Float, y: Float, clicks: Int, shift: Boolean, now: Long) {
+        when (action) {
+            PointerAction.DOWN -> {
+                flingVelocity = 0f
+                focused = true
+                if (!shift && clicks == 1 && tapCheckbox(x, y, now)) {
+                    mouseDrag = MouseDrag.NONE
+                    return
+                }
+                val (offset, upstream) = offsetAtView(x, y)
+                when {
+                    shift -> {
+                        mouseAnchor = selection.anchor
+                        mouseDrag = MouseDrag.CHARACTERS
+                        select(Selection(mouseAnchor, offset), now)
+                    }
+                    clicks >= 3 -> {
+                        val p = document.paragraphAt(offset)
+                        pressedWordStart = document.paragraphStart(p)
+                        pressedWordEnd = document.paragraphEnd(p)
+                        mouseDrag = MouseDrag.PARAGRAPHS
+                        select(Selection(pressedWordStart, pressedWordEnd), now)
+                    }
+                    clicks == 2 -> {
+                        mouseDrag = MouseDrag.WORDS
+                        selectWordAt(x, y, now)
+                    }
+                    else -> {
+                        mouseAnchor = offset
+                        mouseDrag = MouseDrag.CHARACTERS
+                        select(Selection(offset, upstream = upstream), now)
+                    }
+                }
+                host.requestFrame()
+            }
+            PointerAction.MOVE -> {
+                if (mouseDrag == MouseDrag.NONE) return
+                // Dragging past the top or bottom scrolls toward the pointer, by how far past.
+                val visibleTop = insetTop
+                val visibleBottom = viewHeight - insetBottom
+                if (y < visibleTop) scrollTo(scrollY - (visibleTop - y))
+                else if (y > visibleBottom) scrollTo(scrollY + (y - visibleBottom))
+                when (mouseDrag) {
+                    MouseDrag.CHARACTERS -> {
+                        val (offset, _) = offsetAtView(x, y)
+                        if (offset != selection.focus) select(Selection(mouseAnchor, offset), now)
+                    }
+                    MouseDrag.WORDS -> extendByWords(x, y, now)
+                    MouseDrag.PARAGRAPHS -> extendByParagraphs(x, y, now)
+                    MouseDrag.NONE -> {}
+                }
+            }
+            PointerAction.UP, PointerAction.CANCEL -> mouseDrag = MouseDrag.NONE
+        }
+    }
+
+    private fun extendByParagraphs(x: Float, y: Float, now: Long) {
+        val p = document.paragraphAt(offsetAtView(x, y).first)
+        val start = document.paragraphStart(p)
+        val end = document.paragraphEnd(p)
+        val target = when {
+            start < pressedWordStart -> Selection(pressedWordEnd, start)
+            end > pressedWordEnd -> Selection(pressedWordStart, end)
+            else -> Selection(pressedWordStart, pressedWordEnd)
+        }
+        if (target != selection) select(target, now)
+    }
+
+    /** The wheel or the trackpad, in view pixels; positive scrolls toward the end of the note. */
+    fun scrollBy(dy: Float) {
+        flingVelocity = 0f
+        scrollTo(scrollY + dy)
+    }
+
+    /**
+     * Whether the editor has the keyboard. On the phone a tap gives it; on the Mac the window
+     * also takes it away, and an editor that lost it shows no caret.
+     */
+    fun setFocused(value: Boolean, now: Long) {
+        if (focused == value) return
+        focused = value
+        caretEpoch = now
+        host.requestFrame()
+    }
+
     // --- Painting -------------------------------------------------------------------------
 
     private var glyphIds = IntArray(256)
@@ -919,8 +1018,8 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                     val top = originY + r.baseline - r.ascent
                     list.rect(originX + r.x - style.caretWidth / 2, top, style.caretWidth, r.ascent + r.descent, style.caretColor)
                 }
-                if (insertionHandleVisible(now)) drawHandle(list, handleAt(sel.focus, sel.upstream, 0), 0)
-            } else {
+                if (style.handles && insertionHandleVisible(now)) drawHandle(list, handleAt(sel.focus, sel.upstream, 0), 0)
+            } else if (style.handles) {
                 drawHandle(list, handleAt(sel.start, false, -1), -1)
                 drawHandle(list, handleAt(sel.end, true, 1), 1)
             }

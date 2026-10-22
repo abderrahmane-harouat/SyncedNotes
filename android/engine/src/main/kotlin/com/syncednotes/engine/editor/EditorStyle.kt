@@ -36,6 +36,8 @@ data class EditorStyle(
     val doubleTapMs: Long = 300,
     val blinkMs: Long = 500,
     val insertionHandleMs: Long = 4000,
+    /** Selection handles are for fingers; a mouse selects without them. */
+    val handles: Boolean = true,
 ) {
     /** The default text size in pixels. */
     val textSize: Float get() = defaultSize * sizeUnit
@@ -87,5 +89,44 @@ data class EditorStyle(
                 checkedTextAlpha = 0.4f,
             )
         }
+
+        /**
+         * The Mac app's note, in its SwiftUI predecessor's measures: 16 pt body text, a 20 pt
+         * margin, lists 24 pt a level, round checkboxes as in Apple Notes. [scale] is pixels
+         * per point (2 on a Retina screen).
+         */
+        fun macLike(scale: Float): EditorStyle = EditorStyle(
+            // Sizes stay in Samsung's units so the toolbar's 17 means the same on both devices;
+            // on the Mac 17 units are the old app's 16 pt.
+            sizeUnit = 16f * scale / 17f,
+            defaultSize = 17,
+            lineSpacing = 1.3f,
+            paddingLeft = 20f * scale,
+            paddingRight = 20f * scale,
+            paddingTop = 20f * scale,
+            paddingBottom = 40f * scale,
+            background = 0xFFFFFFFF.toInt(),
+            textColor = 0xFF1D1D1F.toInt(),
+            // The Mac's own blue and its selection colour in light mode.
+            caretColor = 0xFF007AFF.toInt(),
+            caretWidth = 1.5f * scale,
+            selectionColor = 0xFFB3D7FF.toInt(),
+            handleColor = 0xFF007AFF.toInt(),
+            handleRadius = 0f,
+            handleTouchRadius = 0f,
+            composingUnderline = 1f * scale,
+            touchSlop = 4f * scale,
+            indentWidth = 24f * scale,
+            listMarkerWidth = 24f * scale,
+            listMarkerGap = 6f * scale,
+            bulletRadius = 2.75f * scale,
+            checkboxSize = 16f * scale,
+            // Half the side makes the box a circle.
+            checkboxRadius = 8f * scale,
+            checkboxStroke = 1.25f * scale,
+            checkboxColor = 0xFF8E8E93.toInt(),
+            checkedTextAlpha = 0.5f,
+            handles = false,
+        )
     }
 }

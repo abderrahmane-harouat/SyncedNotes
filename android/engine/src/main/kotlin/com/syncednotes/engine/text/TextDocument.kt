@@ -178,6 +178,9 @@ class TextDocument {
         val lastParagraph = paragraphAt(end)
         val removed = buffer.substring(start, end)
         val insertedText = inserted.toString()
+        // Whether the edit reaches the end of its last paragraph: Return there, at the end of
+        // a heading, starts body text rather than another heading.
+        val atParagraphEnd = end == paragraphEnd(lastParagraph)
         // Text typed over a selection takes the style of the first character it replaces.
         val replacing = removed.isNotEmpty() && insertedText.isNotEmpty()
         val replacedStyles = if (replacing) CharStyle.entries.filter { styles.getValue(it).contains(start) } else null
@@ -216,8 +219,14 @@ class TextDocument {
         // paragraphs joined by deleting a '\n' take the style of the first.
         val kept = paragraphStyles[firstParagraph]
         for (i in lastParagraph downTo firstParagraph + 1) paragraphStyles.removeAt(i)
-        // A new checklist item starts unchecked, whatever the one it was split from.
-        val continued = if (kept.checked) kept.copy(checked = false) else kept
+        // A new checklist item starts unchecked, whatever the one it was split from. After a
+        // title, heading or divider comes body text, in the same writing direction.
+        val endsBlock = kept.role == Role.TITLE || kept.role == Role.HEADING || kept.role == Role.SUBHEADING || kept.role == Role.DIVIDER
+        val continued = when {
+            endsBlock && atParagraphEnd -> ParagraphStyle(direction = kept.direction)
+            kept.checked -> kept.copy(checked = false)
+            else -> kept
+        }
         for (i in newStarts.indices) paragraphStyles.add(firstParagraph + 1, continued)
 
         val change = TextChange(start, removed, insertedText, firstParagraph, lastParagraph - firstParagraph + 1, newStarts.size + 1)

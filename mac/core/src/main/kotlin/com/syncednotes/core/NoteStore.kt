@@ -524,7 +524,8 @@ class NoteStore(folder: File, val vault: Vault) : AutoCloseable {
             return pa.size.compareTo(pb.size)
         }
 
-        internal fun writeAtomically(file: File, bytes: ByteArray) {
+        /** Writes [bytes] whole or not at all: to a file beside [file], then moved into its place. */
+        fun writeAtomically(file: File, bytes: ByteArray) {
             val temporary = File(file.parentFile, ".${file.name}.writing")
             temporary.writeBytes(bytes)
             Files.move(temporary.toPath(), file.toPath(), StandardCopyOption.ATOMIC_MOVE, StandardCopyOption.REPLACE_EXISTING)

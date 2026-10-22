@@ -62,6 +62,16 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     var scrollY = 0f
         private set
 
+    /**
+     * False for a note that is only shown: one in the Trash, or one holding something the
+     * engine cannot edit yet. It can still be scrolled, selected and copied; nothing changes it.
+     */
+    var editable = true
+        set(value) {
+            field = value
+            host.requestFrame()
+        }
+
     private var viewWidth = 0
     private var viewHeight = 0
     private var insetTop = 0f
@@ -148,6 +158,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
      * the input method always agree about what happened.
      */
     private fun edit(start: Int, end: Int, text: CharSequence, after: Selection, now: Long, mergeable: Boolean, fromInput: Boolean) {
+        if (!editable) return
         val before = selection
         // Typing hides the insertion handle, as on Samsung and stock Android; it comes back
         // with the next tap.
@@ -225,6 +236,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     }
 
     fun undo(now: Long): Boolean {
+        if (!editable) return false
         val e = history.undo() ?: return false
         clearComposing()
         typingStyle.clear()
@@ -240,6 +252,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     }
 
     fun redo(now: Long): Boolean {
+        if (!editable) return false
         val e = history.redo() ?: return false
         clearComposing()
         typingStyle.clear()
@@ -689,6 +702,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
 
     /** A formatting change as one undo step of its own. */
     private inline fun formatEdit(now: Long, change: () -> Unit) {
+        if (!editable) return
         val version = document.formatVersion
         change()
         // Choosing what is already chosen (the selected alignment, say) is not an undo step.
@@ -1152,7 +1166,8 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val sel = selection
         if (focused) {
             if (sel.isCollapsed) {
-                val visible = ((now - caretEpoch) / style.blinkMs) % 2 == 0L
+                // A note that is only shown has no caret: there is nowhere to type.
+                val visible = editable && ((now - caretEpoch) / style.blinkMs) % 2 == 0L
                 if (visible) {
                     val r = layout.caretRect(sel.focus, sel.upstream)
                     val top = originY + r.baseline - r.ascent

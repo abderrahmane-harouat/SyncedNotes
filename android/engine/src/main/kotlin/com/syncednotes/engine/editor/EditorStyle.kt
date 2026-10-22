@@ -107,9 +107,9 @@ data class EditorStyle(
         /**
          * The Mac app's note, in its SwiftUI predecessor's measures: 16 pt body text, a 20 pt
          * margin, lists 24 pt a level, round checkboxes as in Apple Notes. [scale] is pixels
-         * per point (2 on a Retina screen).
+         * per point (2 on a Retina screen); [dark] for the Mac's dark mode.
          */
-        fun macLike(scale: Float): EditorStyle = EditorStyle(
+        fun macLike(scale: Float, dark: Boolean = false): EditorStyle = EditorStyle(
             // Sizes stay in Samsung's units so the toolbar's 17 means the same on both devices;
             // on the Mac 17 units are the old app's 16 pt.
             sizeUnit = 16f * scale / 17f,
@@ -119,12 +119,12 @@ data class EditorStyle(
             paddingRight = 20f * scale,
             paddingTop = 20f * scale,
             paddingBottom = 40f * scale,
-            background = 0xFFFFFFFF.toInt(),
-            textColor = 0xFF1D1D1F.toInt(),
-            // The Mac's own blue and its selection colour in light mode.
-            caretColor = 0xFF007AFF.toInt(),
+            background = if (dark) 0xFF1E1E1E.toInt() else 0xFFFFFFFF.toInt(),
+            textColor = if (dark) 0xFFF5F5F7.toInt() else 0xFF1D1D1F.toInt(),
+            // The Mac's own blue and its selection colour, in each mode.
+            caretColor = if (dark) 0xFF0A84FF.toInt() else 0xFF007AFF.toInt(),
             caretWidth = 1.5f * scale,
-            selectionColor = 0xFFB3D7FF.toInt(),
+            selectionColor = if (dark) 0xFF3F638B.toInt() else 0xFFB3D7FF.toInt(),
             handleColor = 0xFF007AFF.toInt(),
             handleRadius = 0f,
             handleTouchRadius = 0f,
@@ -139,17 +139,17 @@ data class EditorStyle(
             // Half the side makes the box a circle.
             checkboxRadius = 8f * scale,
             checkboxStroke = 1.25f * scale,
-            checkboxColor = 0xFF8E8E93.toInt(),
+            checkboxColor = if (dark) 0xFF98989D.toInt() else 0xFF8E8E93.toInt(),
             checkedTextAlpha = 0.5f,
             handles = false,
             // A quote 20 pt in with a bar beside it, a code block 12 pt in on a panel.
             quoteIndent = 20f * scale,
             codeIndent = 12f * scale,
             quoteBarWidth = 3f * scale,
-            quoteBarColor = 0x40000000,
-            codeBackground = 0x0D000000,
+            quoteBarColor = if (dark) 0x40FFFFFF else 0x40000000,
+            codeBackground = if (dark) 0x14FFFFFF else 0x0D000000,
             codeCornerRadius = 6f * scale,
-            dividerColor = 0x26000000,
+            dividerColor = if (dark) 0x33FFFFFF else 0x26000000,
             dividerThickness = 1f * scale,
         )
     }

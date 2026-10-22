@@ -169,4 +169,37 @@ class BlocksTest {
         c.caretTo(9)
         assertEquals(narrow, c.caretInView()[0], 0.5f)
     }
+
+    @Test
+    fun returnAtTheEndOfATitleStartsBodyText() {
+        val c = composer("Groceries")
+        c.toggleRole(Role.TITLE, 0)
+        c.caretTo(9)
+        c.type("\n", 10)
+        assertEquals(Role.TITLE, c.style(0).role)
+        assertEquals(Role.BODY, c.style(1).role)
+    }
+
+    @Test
+    fun returnInsideAHeadingLeavesBothHalvesHeadings() {
+        val c = composer("Two words")
+        c.toggleRole(Role.HEADING, 0)
+        c.caretTo(3)
+        c.type("\n", 10)
+        assertEquals(listOf(Role.HEADING, Role.HEADING), (0..1).map { c.style(it).role })
+    }
+
+    @Test
+    fun aNoteThatIsOnlyShownCannotBeChangedButCanStillBeSelected() {
+        val c = composer("read only")
+        c.editable = false
+        c.type("x", 10)
+        c.onKey(Key.BACKSPACE, false, false, 20)
+        c.toggleRole(Role.TITLE, 30)
+        c.onKey(Key.SELECT_ALL, false, false, 40)
+        assertEquals("read only", c.document.toString())
+        assertEquals(Role.BODY, c.style(0).role)
+        assertEquals(Selection(0, 9), c.selection)
+        assertFalse(c.undo(50))
+    }
 }

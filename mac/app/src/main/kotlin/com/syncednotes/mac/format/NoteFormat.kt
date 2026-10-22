@@ -259,7 +259,26 @@ class NoteFormat {
             return (channel(color.alpha) shl 24) or (channel(color.red) shl 16) or (channel(color.green) shl 8) or channel(color.blue)
         }
 
-        private fun color(argb: Int): Color = Color.newBuilder()
+        /**
+         * The colours text can be given from the toolbar, each chosen to read on the light and
+         * the dark background, with the very floats the Swift app saved for them.
+         */
+        val TEXT_COLORS: List<Pair<String, Color>> = listOf(
+            "Red" to rgb(0.91f, 0.26f, 0.24f),
+            "Orange" to rgb(0.95f, 0.55f, 0.13f),
+            "Green" to rgb(0.22f, 0.67f, 0.35f),
+            "Blue" to rgb(0.20f, 0.50f, 0.96f),
+            "Purple" to rgb(0.64f, 0.38f, 0.90f),
+            "Pink" to rgb(0.93f, 0.33f, 0.58f),
+            "Gray" to rgb(0.56f, 0.56f, 0.60f),
+        )
+
+        /** How the engine shows a stored colour: 0xAARRGGBB. */
+        fun argbOf(color: Color): Int = argb(color)
+
+        private fun rgb(r: Float, g: Float, b: Float): Color = Color.newBuilder().setRed(r).setGreen(g).setBlue(b).setAlpha(1f).build()
+
+        private fun color(argb: Int): Color = TEXT_COLORS.firstOrNull { argb(it.second) == argb }?.second ?: Color.newBuilder()
             .setRed(((argb shr 16) and 0xFF) / 255f)
             .setGreen(((argb shr 8) and 0xFF) / 255f)
             .setBlue((argb and 0xFF) / 255f)

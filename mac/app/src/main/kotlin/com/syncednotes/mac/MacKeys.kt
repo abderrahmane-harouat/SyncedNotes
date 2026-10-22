@@ -10,7 +10,6 @@ import androidx.compose.ui.input.key.key
 import androidx.compose.ui.input.key.type
 import com.syncednotes.engine.editor.Composer
 import com.syncednotes.engine.editor.Key
-import com.syncednotes.engine.text.CharStyle
 import androidx.compose.ui.input.key.Key as ComposeKey
 
 /** The Mac's keys for moving and editing, mapped onto the engine's. */
@@ -32,12 +31,12 @@ object MacKeys {
         val option = event.isAltPressed
         if (command) {
             when (event.key) {
+                // Bold, italic and the other styles are the Format menu's, with these same keys.
                 ComposeKey.Z -> composer.onKey(if (shift) Key.REDO else Key.UNDO, false, false, t)
                 ComposeKey.A -> composer.onKey(Key.SELECT_ALL, false, false, t)
-                ComposeKey.B -> composer.toggle(CharStyle.BOLD, t)
-                ComposeKey.I -> composer.toggle(CharStyle.ITALIC, t)
-                ComposeKey.U -> composer.toggle(CharStyle.UNDERLINE, t)
-                ComposeKey.X -> if (shift) composer.toggle(CharStyle.STRIKETHROUGH, t) else return false
+                ComposeKey.C -> copy(composer)
+                ComposeKey.X -> if (shift) return false else if (copy(composer) && composer.editable) composer.onKey(Key.BACKSPACE, false, false, t)
+                ComposeKey.V -> Pasteboard.paste()?.let { composer.type(it.replace("\r\n", "\n").replace('\r', '\n'), t) }
                 // ⌘← and ⌘→ go to the ends of the line, ⌘↑ and ⌘↓ to the ends of the note.
                 ComposeKey.DirectionLeft -> composer.onKey(Key.HOME, shift, false, t)
                 ComposeKey.DirectionRight -> composer.onKey(Key.END, shift, false, t)
@@ -64,6 +63,13 @@ object MacKeys {
         }
         // Option moves and deletes by words, as everywhere on the Mac.
         composer.onKey(key, shift, option, t)
+        return true
+    }
+
+    /** Copies the selection as plain text, for this Mac only; false when nothing is selected. */
+    private fun copy(composer: Composer): Boolean {
+        val text = composer.selectedText() ?: return false
+        Pasteboard.copy(text)
         return true
     }
 }

@@ -27,15 +27,20 @@ class Shaper(private val stack: FontStack) {
     private var input = direct(4096)
     private var output = direct(24 * 256)
 
-    fun shape(text: CharSequence, start: Int, end: Int, size: Float): ShapedRun {
+    /**
+     * [rtl] when the glyphs will be laid out right to left: Arabic and Hebrew. The glyphs still
+     * come back in the text's order; where a mark lands on its letter depends on the direction.
+     */
+    fun shape(text: CharSequence, start: Int, end: Int, size: Float, rtl: Boolean = false): ShapedRun {
         val length = end - start
         if (length == 0) return ShapedRun.EMPTY
-        val needed = 4 + 4 * stack.fonts.size + 4 + 4 + 2 * length
+        val needed = 4 + 4 * stack.fonts.size + 4 + 4 + 4 + 2 * length
         if (input.capacity() < needed) input = direct(needed * 2)
         input.clear()
         input.putInt(stack.fonts.size)
         for (f in stack.fonts) input.putInt(f.id)
         input.putFloat(size)
+        input.putInt(if (rtl) 1 else 0)
         input.putInt(length)
         for (i in start until end) input.putChar(text[i])
 

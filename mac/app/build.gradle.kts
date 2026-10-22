@@ -146,15 +146,20 @@ tasks.withType<JavaExec>().configureEach {
 }
 
 // A run from the build: the engine from its build folder, and made-up notes beside the real
-// ones, never in them, which may be captured to check the app's look. Later arguments win.
+// ones, never in them, which may be captured to check the app's look. Added as the task
+// starts, after Compose has set the app's own arguments: the last of each wins.
 tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
-    jvmArgs(
-        "-Djava.library.path=${glyphsRelease.asFile.absolutePath}",
-        "-Dsyncednotes.folder=SyncedNotes-Try",
-        "-Dsyncednotes.allowCapture=true",
-    )
-    // Unlocks the made-up notes of makeTryNotes at launch, with their made-up passphrase.
-    if (project.hasProperty("tryUnlock")) jvmArgs("-Dsyncednotes.tryPassphrase=made-up try passphrase")
+    val tryUnlock = project.hasProperty("tryUnlock")
+    val library = glyphsRelease.asFile.absolutePath
+    doFirst {
+        (this as JavaExec).jvmArgs(
+            "-Djava.library.path=$library",
+            "-Dsyncednotes.folder=SyncedNotes-Try",
+            "-Dsyncednotes.allowCapture=true",
+        )
+        // Unlocks the made-up notes of makeTryNotes at launch, with their made-up passphrase.
+        if (tryUnlock) jvmArgs("-Dsyncednotes.tryPassphrase=made-up try passphrase")
+    }
 }
 
 // Fills the try-out folder with made-up notes that use every kind of formatting, to look at

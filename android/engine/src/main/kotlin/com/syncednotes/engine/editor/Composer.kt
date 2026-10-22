@@ -561,7 +561,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val pl = layout.paragraph(p)
         val localY = docY - layout.paragraphTop(p)
         if (localY < 0 || localY > pl.lineHeight(0)) return false
-        val markerLeft = originX + pl.lineLeft(0) - style.listMarkerWidth
+        val markerLeft = originX + markerLeft(pl)
         // The whole hanging margin is the target, so the small box is easy to hit.
         if (x < markerLeft - style.touchSlop || x > markerLeft + style.listMarkerWidth) return false
         formatEdit(now) { document.setParagraphStyle(p, ps.copy(checked = !ps.checked)) }
@@ -782,15 +782,19 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             Key.UNDO -> undo(now)
             Key.REDO -> redo(now)
             Key.SELECT_ALL -> select(Selection(0, document.length), now)
-            Key.LEFT -> move(shift, now) {
-                if (!shift && !sel.isCollapsed) sel.start
-                else if (word) Boundaries.previousWordStart(text, sel.focus)
-                else Boundaries.previousCluster(text, sel.focus)
-            }
-            Key.RIGHT -> move(shift, now) {
-                if (!shift && !sel.isCollapsed) sel.end
-                else if (word) Boundaries.nextWordEnd(text, sel.focus)
-                else Boundaries.nextCluster(text, sel.focus)
+            Key.LEFT, Key.RIGHT -> {
+                // In a paragraph that runs right to left, the left arrow goes on through the
+                // text and the right one back.
+                val forward = (key == Key.RIGHT) != layout.paragraph(document.paragraphAt(sel.focus)).rtl
+                if (forward) move(shift, now) {
+                    if (!shift && !sel.isCollapsed) sel.end
+                    else if (word) Boundaries.nextWordEnd(text, sel.focus)
+                    else Boundaries.nextCluster(text, sel.focus)
+                } else move(shift, now) {
+                    if (!shift && !sel.isCollapsed) sel.start
+                    else if (word) Boundaries.previousWordStart(text, sel.focus)
+                    else Boundaries.previousCluster(text, sel.focus)
+                }
             }
             Key.UP, Key.DOWN, Key.PAGE_UP, Key.PAGE_DOWN -> moveVertically(key, shift, now)
             Key.HOME -> move(shift, now) { if (word) 0 else layout.lineBounds(sel.focus, sel.upstream).first }
@@ -1190,7 +1194,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val done = pstyle.list == ListType.CHECKBOX && pstyle.checked
         drawBlock(list, p, pstyle, pl, top)
         if (pstyle.role == Role.DIVIDER) return
-        drawListMarker(list, p, pstyle, originX + pl.lineLeft(0) - style.listMarkerWidth, top + pl.baseline(0), runs.sizes[0])
+        drawListMarker(list, p, pstyle, originX + markerLeft(pl), top + pl.baseline(0), runs.sizes[0], pl.rtl)
 
         var g = 0
         for (line in 0 until pl.lineCount) {
@@ -1217,10 +1221,19 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                 val e = sel.end - base
                 val lineLimit = if (lastLine) le + 1 else le
                 if (e > ls && s < lineLimit) {
-                    val x0 = pl.xOf(maxOf(s, ls), line)
-                    var x1 = pl.xOf(minOf(e, le), line)
-                    if (lastLine && e > le) x1 += style.textSize * 0.3f
-                    list.rect(originX + x0, lineTop, x1 - x0, lineHeight, style.selectionColor)
+                    val spans = pl.spans(line, maxOf(s, ls), minOf(e, le))
+                    var k = 0
+                    while (k < spans.size) {
+                        list.rect(originX + spans[k], lineTop, spans[k + 1] - spans[k], lineHeight, style.selectionColor)
+                        k += 2
+                    }
+                    // A selection running on past the paragraph shows a little of its end, on
+                    // the side the paragraph ends on.
+                    if (lastLine && e > le) {
+                        val w = style.textSize * 0.3f
+                        val x = if (pl.rtl) pl.lineLeft(line) - w else pl.lineRight(line)
+                        list.rect(originX + x, lineTop, w, lineHeight, style.selectionColor)
+                    }
                 }
             }
 
@@ -1268,17 +1281,23 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                 val s = composingStart - base
                 val e = composingEnd - base
                 if (e > ls && s < le) {
-                    val x0 = pl.xOf(maxOf(s, ls), line)
-                    val x1 = pl.xOf(minOf(e, le), line)
                     val size = pl.sizeAtCaret(minOf(e, le))
                     val y = baselineY + size * unitMetrics.descent * 0.35f
-                    list.rect(originX + x0, y, x1 - x0, style.composingUnderline, style.textColor)
+                    val spans = pl.spans(line, maxOf(s, ls), minOf(e, le))
+                    var k = 0
+                    while (k < spans.size) {
+                        list.rect(originX + spans[k], y, spans[k + 1] - spans[k], style.composingUnderline, style.textColor)
+                        k += 2
+                    }
                 }
             }
         }
     }
 
-    /** Calls [block] with each style run's part of [line] and where it starts and ends on screen. */
+    /**
+     * Calls [block] with each style run's part of [line] and where it starts and ends on
+     * screen: once per stretch, as a run that changes direction mid-line is drawn in pieces.
+     */
     private inline fun forEachRun(pl: ParagraphLayout, line: Int, block: (run: Int, x0: Float, x1: Float) -> Unit) {
         val ls = pl.lineStart(line)
         val le = pl.lineEnd(line)
@@ -1286,7 +1305,14 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         while (r < pl.runs.count && pl.runs.start(r) < le) {
             val a = maxOf(pl.runs.start(r), ls)
             val b = minOf(pl.runs.end(r), le)
-            if (a < b) block(r, originX + pl.xOf(a, line), originX + pl.xOf(b, line))
+            if (a < b) {
+                val spans = pl.spans(line, a, b)
+                var k = 0
+                while (k < spans.size) {
+                    block(r, originX + spans[k], originX + spans[k + 1])
+                    k += 2
+                }
+            }
             r++
         }
     }
@@ -1306,7 +1332,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     private fun drawBlock(list: DrawList, p: Int, ps: ParagraphStyle, pl: ParagraphLayout, top: Float) {
         when (ps.role) {
             Role.QUOTE -> if (style.quoteBarWidth > 0f) {
-                val x = originX + pl.textLeft - style.quoteIndent
+                val x = if (pl.rtl) originX + pl.rightEdge + style.quoteIndent - style.quoteBarWidth else originX + pl.textLeft - style.quoteIndent
                 list.rect(x, top, style.quoteBarWidth, pl.height, style.quoteBarColor)
             }
             Role.CODE_BLOCK -> {
@@ -1334,7 +1360,11 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
      * ● ○ ▪ for bullets, 1. a. i. for numbers. Numbers count the items of the same list just
      * above, so they renumber themselves as items come and go without being stored.
      */
-    private fun drawListMarker(list: DrawList, p: Int, ps: ParagraphStyle, markerLeft: Float, baselineY: Float, size: Float) {
+    /** Where a list paragraph's marker box starts: before its first line, on the side it begins. */
+    private fun markerLeft(pl: ParagraphLayout): Float =
+        if (pl.rtl) pl.lineRight(0) else pl.lineLeft(0) - style.listMarkerWidth
+
+    private fun drawListMarker(list: DrawList, p: Int, ps: ParagraphStyle, markerLeft: Float, baselineY: Float, size: Float, rtl: Boolean) {
         val scale = size / style.textSize
         // Centred on the x-height, where the strikethrough also sits.
         val cy = baselineY + size * (unitMetrics.strikeoutOffset + unitMetrics.strikeoutThickness / 2)
@@ -1366,8 +1396,9 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                 val run = layout.markerRun(label, size)
                 var width = 0f
                 for (i in 0 until run.count) width += run.advances[i]
-                // Right-aligned against the text, like a numbered list in any word processor.
-                var x = markerLeft + style.listMarkerWidth - style.listMarkerGap - width
+                // Against the text, like a numbered list in any word processor: on its left, or on
+                // its right in a paragraph that runs right to left.
+                var x = if (rtl) markerLeft + style.listMarkerGap else markerLeft + style.listMarkerWidth - style.listMarkerGap - width
                 for (i in 0 until run.count) {
                     if (i == glyphIds.size) growGlyphScratch()
                     glyphIds[i] = run.glyphs[i]

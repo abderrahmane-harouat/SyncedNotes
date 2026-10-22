@@ -8,9 +8,11 @@ Mac, or to Apple.
 
 Until these are done, the Swift app stays in the repo and on the Mac.
 
-- [ ] **Arabic and other right-to-left text**: Arabic joining and the lam-alef ligature in the
+- [x] **Arabic and other right-to-left text**: Arabic joining and the lam-alef ligature in the
   Rust shaper (OpenType GSUB), marks and kerning (GPOS), and the bidirectional algorithm in the
   engine's layout, with the caret and selection following what is on screen.
+- [ ] Right-to-left details: bracket pairs (UAX #9's N0), the invisible direction controls,
+  and justified lines.
 - [ ] **Pictures and tables** in the engine, so the notes holding them can be edited; until
   then they open read-only.
 - [ ] **Rich copy and paste** between notes, keeping formatting; plain text today.

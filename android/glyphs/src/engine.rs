@@ -126,7 +126,8 @@ impl Engine {
         ])
     }
 
-    /// Input: i32 fontCount, i32 fontIds[fontCount], f32 size, i32 length, u16 text[length].
+    /// Input: i32 fontCount, i32 fontIds[fontCount], f32 size, i32 flags (bit 0: the text is
+    /// laid out right to left), i32 length, u16 text[length].
     /// Output: per glyph i32 fontId, i32 glyph, i32 cluster, f32 advance, f32 dx, f32 dy.
     /// Returns the glyph count, or minus the count needed when `output` is too small, or
     /// `i32::MIN` when the input is malformed.
@@ -148,6 +149,7 @@ impl Engine {
         let Some(size) = r.f32().filter(|s| s.is_finite() && *s > 0.0 && *s <= MAX_GLYPH_PIXELS) else {
             return MALFORMED;
         };
+        let Some(flags) = r.i32() else { return MALFORMED };
         let Some(len) = r.i32().and_then(|l| usize::try_from(l).ok()) else { return MALFORMED };
         let mut text = Vec::with_capacity(len.min(input.len() / 2));
         for _ in 0..len {
@@ -158,7 +160,7 @@ impl Engine {
         }
 
         let fonts: Vec<&Font> = ids.iter().map(|&i| &self.fonts[i]).collect();
-        shape(&fonts, &text, size, &mut self.shaped);
+        shape(&fonts, &text, size, flags & 1 != 0, &mut self.shaped);
 
         let n = self.shaped.len();
         if n * SHAPED_GLYPH_BYTES > output.len() {
@@ -292,6 +294,7 @@ mod tests {
         b.extend(1i32.to_le_bytes());
         b.extend(font.to_le_bytes());
         b.extend(size.to_le_bytes());
+        b.extend(0i32.to_le_bytes());
         let units: Vec<u16> = text.encode_utf16().collect();
         b.extend((units.len() as i32).to_le_bytes());
         for u in units {

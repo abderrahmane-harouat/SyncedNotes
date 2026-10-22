@@ -50,6 +50,17 @@ fun main() {
             ),
             work,
         )
+        save(
+            note(
+                p("ملاحظات الأسبوع", Role.ROLE_TITLE),
+                p("هذه ملاحظة مختلقة لتجربة الكتابة من اليمين إلى اليسار، مع كلمة English في وسطها."),
+                p("السَّلامُ عَلَيْكُم، والأرقام 2026 تبقى من اليسار."),
+                list("شراء الخبز", ListKind.LIST_KIND_NUMBERED, 5),
+                list("الاتصال بالمخبز", ListKind.LIST_KIND_NUMBERED, 5),
+                check("سقي النباتات", true),
+                p("An English line with عربي inside it, and (brackets)."),
+            ),
+        )
         val old = newId()
         store.save(note(p("Old shopping list", Role.ROLE_TITLE), p("milk, bread")), old, now = t.minusSeconds(90_000))
         store.moveToTrash(old)

@@ -15,8 +15,8 @@ does everything they did. Not independently reviewed. What comes next is in
 [`TODO.md`](TODO.md).
 
 Not back yet in the rebuilt app: pictures and tables (a note holding one opens read-only,
-and is never saved over), right-to-left text such as Arabic, rich copy and paste, dragging
-notes onto folders, typing `- ` or `1. ` to start a list, and the Edit menu.
+and is never saved over), rich copy and paste, dragging notes onto folders, typing `- ` or
+`1. ` to start a list, and the Edit menu.
 
 ## What it does
 

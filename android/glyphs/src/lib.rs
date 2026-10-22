@@ -5,6 +5,7 @@
 //! rasterizing outlines, and compositing a frame's draw list into pixels.
 
 pub mod font;
+pub mod otl;
 pub mod paint;
 pub mod raster;
 pub mod shape;

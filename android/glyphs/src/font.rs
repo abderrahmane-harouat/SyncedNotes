@@ -74,6 +74,10 @@ pub struct Font {
     glyf: Table,
     hmtx: Table,
     cmap: Option<Cmap>,
+    /// OpenType layout: glyph classes, substitutions (Arabic joining, ligatures), positioning.
+    gdef: Option<Table>,
+    gsub: Option<Table>,
+    gpos: Option<Table>,
 }
 
 // Composite glyphs nest; a hostile file could make them recurse forever.
@@ -144,6 +148,7 @@ impl Font {
         }
 
         let cmap = find(b"cmap").and_then(|t| Self::pick_cmap(d, t));
+        let (gdef, gsub, gpos) = (find(b"GDEF"), find(b"GSUB"), find(b"GPOS"));
 
         // Both tables are optional in practice; fall back to proportions typical of text faces.
         let em = units_per_em as i32;
@@ -172,6 +177,9 @@ impl Font {
             glyf,
             hmtx,
             cmap,
+            gdef,
+            gsub,
+            gpos,
             data,
         })
     }
@@ -198,6 +206,12 @@ impl Font {
             }
         }
         best.map(|(_, c)| c)
+    }
+
+    /// The GDEF, GSUB and GPOS tables' bytes, each when the font has it.
+    pub fn layout_tables(&self) -> (Option<&[u8]>, Option<&[u8]>, Option<&[u8]>) {
+        let slice = |t: Option<Table>| t.and_then(|t| bytes(&self.data, t.offset, t.length));
+        (slice(self.gdef), slice(self.gsub), slice(self.gpos))
     }
 
     pub fn num_glyphs(&self) -> u16 {

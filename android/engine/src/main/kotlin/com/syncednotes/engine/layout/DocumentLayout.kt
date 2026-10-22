@@ -4,6 +4,7 @@ import com.syncednotes.engine.render.FontFamily
 import com.syncednotes.engine.render.FontStack
 import com.syncednotes.engine.render.ShapedRun
 import com.syncednotes.engine.render.Shaper
+import com.syncednotes.engine.text.Bidi
 import com.syncednotes.engine.text.CharStyle
 import com.syncednotes.engine.text.ParagraphStyle
 import com.syncednotes.engine.text.Role
@@ -103,9 +104,12 @@ class DocumentLayout(
         val text = document.substring(start, end)
         val style = document.paragraphStyle(index)
         val runs = styleRuns(start, text.length, style.role)
+        val baseLevel = Bidi.paragraphLevel(text, style.direction)
+        val levels = Bidi.levels(text, baseLevel)
 
-        // Shape each stretch that uses one face at one size: bold and italic are separate
-        // font files, and glyph advances scale with the size.
+        // Shape each stretch that uses one face at one size and runs one way: bold and italic
+        // are separate font files, glyph advances scale with the size, and a mark lands on its
+        // letter differently right to left.
         val parts = ArrayList<Pair<Int, ShapedRun>>()
         var r = 0
         while (r < runs.count && text.isNotEmpty()) {
@@ -115,13 +119,31 @@ class DocumentLayout(
             while (next < runs.count && faceOf(runs.flags[next]) == face && runs.sizes[next] == size) next++
             val a = runs.start(r)
             val b = runs.end(next - 1)
-            parts += a to shaper(face).shape(text, a, b, size)
+            var p = a
+            while (p < b) {
+                val rtl = levels != null && Bidi.isRtl(levels[p].toInt())
+                var q = p + 1
+                while (q < b && (levels != null && Bidi.isRtl(levels[q].toInt())) == rtl) q++
+                if (rtl) {
+                    // Brackets read mirrored in text that runs right to left.
+                    val mirrored = String(CharArray(q - p) { Bidi.mirror(text[p + it]) })
+                    parts += p to shaper(face).shape(mirrored, 0, mirrored.length, size, rtl = true)
+                } else {
+                    parts += p to shaper(face).shape(text, p, q, size)
+                }
+                p = q
+            }
             r = next
         }
 
-        val (textLeft, textRight) = margins(style)
+        val (startMargin, endMargin) = margins(style)
+        // A right-to-left paragraph has its indent, list markers and quote bar on the right.
+        val (textLeft, textRight) = if (baseLevel % 2 == 1) endMargin to startMargin else startMargin to endMargin
         val spacing = lineSpacing * (if (style.lineSpacing > 0f) style.lineSpacing else 1f)
-        val layout = ParagraphLayout(text, concatenate(parts), runs, width, ascentPerPx, descentPerPx, spacing, textLeft, style.alignment, textRight)
+        val layout = ParagraphLayout(
+            text, concatenate(parts), runs, width, ascentPerPx, descentPerPx, spacing, textLeft, style.alignment, textRight,
+            levels, baseLevel,
+        )
         paragraphs[index] = layout
         return layout
     }

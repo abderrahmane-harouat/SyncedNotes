@@ -13,8 +13,11 @@ Until these are done, the Swift app stays in the repo and on the Mac.
   engine's layout, with the caret and selection following what is on screen.
 - [ ] Right-to-left details: bracket pairs (UAX #9's N0), the invisible direction controls,
   and justified lines.
-- [ ] **Pictures and tables** in the engine, so the notes holding them can be edited; until
-  then they open read-only.
+- [x] **Pictures** in the engine: inserted on both devices, shown at their size, kept whole
+  when deleting or typing beside them, and synced.
+- [ ] A picture amid text on a line (the Swift app could make one), and **tables**; notes
+  holding either still open read-only.
+- [ ] Copying and pasting a picture; resizing one.
 - [ ] **Rich copy and paste** between notes, keeping formatting; plain text today.
 - [ ] Lists that start as you type: `- `, `* ` or `1. ` at the start of a line.
 - [ ] An Edit menu that acts on the note or the field that has focus.
@@ -51,7 +54,7 @@ Until these are done, the Swift app stays in the repo and on the Mac.
 - [ ] Links between notes.
 - [ ] Tags, alongside folders.
 - [ ] Pinned notes, and a choice of sort order (edited, created, title).
-- [ ] Insert a picture from a file dialog (needs read-only access to files the user picks).
+- [x] Insert a picture: a file on the Mac, the photo picker on the phone.
 - [ ] Files that are not pictures, kept locked like pictures.
 - [ ] Tables: column widths, selecting and moving rows and columns.
 - [ ] A heading made not bold keeps that when saved (today a heading's weight is part of the

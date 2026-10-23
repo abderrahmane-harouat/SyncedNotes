@@ -218,6 +218,7 @@ class TextDocument {
         // A paragraph split by Enter keeps its style in both halves (a bullet list goes on);
         // paragraphs joined by deleting a '\n' take the style of the first.
         val kept = paragraphStyles[firstParagraph]
+        val lastStyle = paragraphStyles[lastParagraph]
         for (i in lastParagraph downTo firstParagraph + 1) paragraphStyles.removeAt(i)
         // A new checklist item starts unchecked, whatever the one it was split from. After a
         // title, heading or divider comes body text, in the same writing direction.
@@ -228,9 +229,27 @@ class TextDocument {
             else -> kept
         }
         for (i in newStarts.indices) paragraphStyles.add(firstParagraph + 1, continued)
+        // A divider's or picture's style stays only with the paragraph that still holds its
+        // object. Text split off it is plain; text joined to it after the object went keeps
+        // the style it had, so deleting a picture above a heading leaves the heading one.
+        if (kept.isObject) {
+            for (q in firstParagraph..firstParagraph + newStarts.size) {
+                val holdsObject = buffer.length > paragraphStarts[q] && buffer[paragraphStarts[q]] == OBJECT && paragraphEnd(q) == paragraphStarts[q] + 1
+                paragraphStyles[q] = when {
+                    holdsObject -> kept
+                    q == firstParagraph + newStarts.size && !lastStyle.isObject && lastParagraph > firstParagraph -> lastStyle
+                    else -> ParagraphStyle(direction = kept.direction)
+                }
+            }
+        }
 
         val change = TextChange(start, removed, insertedText, firstParagraph, lastParagraph - firstParagraph + 1, newStarts.size + 1)
         for (l in listeners) l(change)
         return change
+    }
+
+    companion object {
+        /** U+FFFC: where something that is not text (a divider, a picture) stands. */
+        const val OBJECT = '\uFFFC'
     }
 }

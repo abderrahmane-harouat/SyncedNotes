@@ -74,6 +74,30 @@ pub extern "system" fn Java_com_syncednotes_engine_render_Native_loadFont(
 }
 
 #[unsafe(no_mangle)]
+pub extern "system" fn Java_com_syncednotes_engine_render_Native_loadImage(
+    env: JniEnv,
+    _class: JObject,
+    data: JObject,
+    width: i32,
+    height: i32,
+) -> i32 {
+    guarded(|| {
+        let Some(bytes) = (unsafe { direct_buffer(env, data) }) else { return ERROR_BAD_BUFFER };
+        let Some(length) = (width as i64).checked_mul(height as i64).and_then(|n| n.checked_mul(4)) else { return ERROR_BAD_BUFFER };
+        let Some(bytes) = i32::try_from(length).ok().and_then(|n| prefix(bytes, n)) else { return ERROR_BAD_BUFFER };
+        with_engine(|e| e.load_image(bytes, width, height))
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "system" fn Java_com_syncednotes_engine_render_Native_freeImage(_env: JniEnv, _class: JObject, id: i32) -> i32 {
+    guarded(|| {
+        with_engine(|e| e.free_image(id));
+        0
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "system" fn Java_com_syncednotes_engine_render_Native_fontMetrics(
     env: JniEnv,
     _class: JObject,

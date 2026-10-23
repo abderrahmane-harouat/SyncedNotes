@@ -45,6 +45,7 @@ class EditorActivity : ScreenActivity() {
     /** Samsung's reading mode: the note shown without the toolbar or the keyboard, to read. */
     private var reading = false
     private lateinit var readingButton: ImageButton
+    private lateinit var pictureButton: ImageButton
     private lateinit var findBar: View
     private lateinit var findField: android.widget.EditText
     private lateinit var findCount: TextView
@@ -59,6 +60,7 @@ class EditorActivity : ScreenActivity() {
     private val save = Runnable { saveNow() }
     private val onRemote: (Set<Id>) -> Unit = { ids -> if (id in ids) takeRemoteVersion() }
     private val onChange: () -> Unit = { if (!notes.isUnlocked) finish() }
+    private val onPictureReady: () -> Unit = { if (::canvas.isInitialized) canvas.requestFrame() }
 
     private fun now() = SystemClock.uptimeMillis()
 
@@ -89,6 +91,8 @@ class EditorActivity : ScreenActivity() {
         canvas = NoteCanvasView(this, AppFonts.get(this))
         findViewById<ViewGroup>(R.id.canvas_holder).addView(canvas, ViewGroup.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT))
         val composer = canvas.composer
+        composer.pictures = notes.pictures
+        notes.addPictureListener(onPictureReady)
         val topBar = topBar(composer.style.background)
         (findViewById<ViewGroup>(R.id.root)).addView(topBar, 0)
         findBar = findBar(composer.style.background)
@@ -197,6 +201,7 @@ class EditorActivity : ScreenActivity() {
             leave()
             notes.removeRemoteListener(onRemote)
             notes.removeListener(onChange)
+            notes.removePictureListener(onPictureReady)
         }
         super.onDestroy()
     }
@@ -287,10 +292,40 @@ class EditorActivity : ScreenActivity() {
         val back = button(R.drawable.ic_back, "Notes") { finish() }
         val more = button(R.drawable.ic_more, "More") { noteMenu(it) }
         readingButton = button(R.drawable.ic_book, getString(R.string.reading_mode)) { setReading(!reading) }
-        return row(back, spacer(), readingButton, more).apply {
+        // Samsung's attach button, for the one thing it attaches here: a picture.
+        pictureButton = button(R.drawable.ic_photo, "Insert picture") { choosePicture() }
+        if (!editable) pictureButton.visibility = View.GONE
+        return row(back, spacer(), pictureButton, readingButton, more).apply {
             setBackgroundColor(color)
             setPadding(dp(6), 0, dp(6), 0)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48))
+        }
+    }
+
+    /**
+     * The system's photo picker: the app sees only the one picture chosen, and needs no
+     * permission to read the others. Older Android versions get the file picker instead.
+     */
+    private fun choosePicture() {
+        closeCards()
+        val intent = if (Build.VERSION.SDK_INT >= 33) Intent(android.provider.MediaStore.ACTION_PICK_IMAGES)
+        else Intent(Intent.ACTION_OPEN_DOCUMENT).addCategory(Intent.CATEGORY_OPENABLE).setType("image/*")
+        @Suppress("DEPRECATION")
+        startActivityForResult(intent, PICK_PICTURE)
+    }
+
+    @Deprecated("The platform's own, without AndroidX's activity results")
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        @Suppress("DEPRECATION")
+        super.onActivityResult(requestCode, resultCode, data)
+        val uri = data?.data
+        if (requestCode != PICK_PICTURE || resultCode != RESULT_OK || uri == null) return
+        kotlin.concurrent.thread {
+            val handle = runCatching { contentResolver.openInputStream(uri)?.use { it.readBytes() }?.let(notes::addPicture) }.getOrNull()
+            runOnUiThread {
+                if (handle == null) Toast.makeText(this, "That picture could not be added.", Toast.LENGTH_LONG).show()
+                else canvas.composer.insertPicture(handle, now())
+            }
         }
     }
 
@@ -299,6 +334,7 @@ class EditorActivity : ScreenActivity() {
         closeCards()
         canvas.composer.editable = editable && !on
         findViewById<View>(R.id.toolbar).visibility = if (editable && !on) View.VISIBLE else View.GONE
+        pictureButton.visibility = if (editable && !on) View.VISIBLE else View.GONE
         if (on) getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(canvas.windowToken, 0)
         readingButton.background = if (on) rounded(Palette.SELECTED, dp(22).toFloat()) else pressable(radius = dp(22).toFloat())
     }
@@ -424,5 +460,6 @@ class EditorActivity : ScreenActivity() {
         const val NEW = "new"
         /** Where a new note goes. */
         const val FOLDER = "folder"
+        private const val PICK_PICTURE = 1
     }
 }

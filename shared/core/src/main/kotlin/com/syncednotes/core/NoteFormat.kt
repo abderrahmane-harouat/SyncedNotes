@@ -19,6 +19,7 @@ import syncednotes.note.v1.Highlight
 import syncednotes.note.v1.ListLevel as StoredListLevel
 import syncednotes.note.v1.Note
 import syncednotes.note.v1.Paragraph
+import syncednotes.note.v1.Picture
 import syncednotes.note.v1.Run
 import syncednotes.note.v1.Alignment as StoredAlignment
 import syncednotes.note.v1.Direction as StoredDirection
@@ -46,7 +47,13 @@ class NoteFormat {
         val paragraphs = note.paragraphsList.ifEmpty { listOf(Paragraph.getDefaultInstance()) }
         document.replace(0, document.length, paragraphs.joinToString("\n") { it.text })
         for ((index, stored) in paragraphs.withIndex()) {
-            document.setParagraphStyle(index, paragraphStyle(stored))
+            // A picture on a line of its own is the engine's: a paragraph showing it. One
+            // amid text is not yet, and leaving it out is what makes [canEdit] refuse the note.
+            val picture = stored.runsList.singleOrNull()?.takeIf {
+                stored.text == OBJECT.toString() && it.start == 0 && it.length == 1 && it.embedded.hasPicture()
+            }?.embedded?.picture
+            val style = paragraphStyle(stored)
+            document.setParagraphStyle(index, if (picture != null) style.copy(picture = PictureHandles.handle(picture)) else style)
             val base = document.paragraphStart(index)
             for (run in stored.runsList) {
                 val start = base + run.start
@@ -167,7 +174,8 @@ class NoteFormat {
                     .setStart(level.start),
             )
         }
-        for (run in runs(document, start, end, divider = style.role == Role.DIVIDER)) stored.addRuns(run)
+        val picture = if (style.picture != 0) PictureHandles.picture(style.picture) else null
+        for (run in runs(document, start, end, divider = style.role == Role.DIVIDER, picture)) stored.addRuns(run)
         return stored.build()
     }
 
@@ -176,14 +184,14 @@ class NoteFormat {
      * stretches left out. A divider's placeholder character is a run of its own, as each
      * embedded thing is.
      */
-    private fun runs(document: TextDocument, start: Int, end: Int, divider: Boolean): List<Run> {
+    private fun runs(document: TextDocument, start: Int, end: Int, divider: Boolean, picture: Picture?): List<Run> {
         val runs = ArrayList<Run>()
         var a = start
         while (a < end) {
-            val here = runAt(document, a, divider)
+            val here = runAt(document, a, divider, picture)
             var b = a + 1
             if (!here.hasEmbedded()) {
-                while (b < end && runAt(document, b, divider) == here) b++
+                while (b < end && runAt(document, b, divider, picture) == here) b++
             }
             if (here != PLAIN) runs += here.toBuilder().setStart(a - start).setLength(b - a).build()
             a = b
@@ -192,7 +200,7 @@ class NoteFormat {
     }
 
     /** Everything recorded about the character at [offset], as a run without a position. */
-    private fun runAt(document: TextDocument, offset: Int, divider: Boolean): Run {
+    private fun runAt(document: TextDocument, offset: Int, divider: Boolean, picture: Picture? = null): Run {
         val run = Run.newBuilder()
             .setBold(document.hasStyle(CharStyle.BOLD, offset))
             .setItalic(document.hasStyle(CharStyle.ITALIC, offset))
@@ -204,6 +212,7 @@ class NoteFormat {
         val size = relativeSize(document.valueAt(ValueStyle.SIZE, offset))
         if (size != 1f) run.setRelativeSize(size)
         if (divider && document.text[offset] == OBJECT) run.setEmbedded(Embedded.newBuilder().setDivider(Divider.getDefaultInstance()))
+        if (picture != null && document.text[offset] == OBJECT) run.setEmbedded(Embedded.newBuilder().setPicture(picture))
         return run.build()
     }
 

@@ -45,8 +45,17 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     }
     private val layout = DocumentLayout(
         document, fonts, style.sizeUnit, style.defaultSize, style.lineSpacing, style.indentWidth, style.listMarkerWidth,
-        style.quoteIndent, style.codeIndent,
+        style.quoteIndent, style.codeIndent, style.pictureScale,
     )
+
+    /** Where the note's pictures come from; none shows each as an empty frame. */
+    var pictures: PictureSource? = null
+        set(value) {
+            field = value
+            layout.pictureSize = { handle -> value?.size(handle) }
+            layout.invalidate()
+            host.requestFrame()
+        }
     private val history = History(document.snapshot())
     /** Font metrics for 1px text; multiplied by each run's size where it is drawn. */
     private val unitMetrics = fonts.regular.primary.metrics(1f)
@@ -288,6 +297,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     /** Text typed on a hardware keyboard: replaces the selection, like the IME would. */
     fun type(text: CharSequence, now: Long) {
         if (text.length == 1 && text[0] == '\n' && leaveEmptyListItem(now)) return
+        if (text.isNotEmpty() && text[0] != '\n' && text[0] != TextDocument.OBJECT) leaveObjectParagraph(now)
         clearComposing()
         val s = selection.start
         edit(s, selection.end, text, Selection(s + text.length), now, mergeable = true, fromInput = true)
@@ -330,6 +340,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
 
     fun commitText(text: CharSequence, newCursorPosition: Int, now: Long) = batch {
         if (composingStart < 0 && text.length == 1 && text[0] == '\n' && leaveEmptyListItem(now)) return@batch
+        if (composingStart < 0 && text.isNotEmpty() && text[0] != '\n') leaveObjectParagraph(now)
         val (s, e) = replacementRange()
         val cursor = cursorAfter(s, text, newCursorPosition)
         clearComposing()
@@ -337,6 +348,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     }
 
     fun setComposingText(text: CharSequence, newCursorPosition: Int, now: Long) = batch {
+        if (composingStart < 0 && text.isNotEmpty()) leaveObjectParagraph(now)
         val (s, e) = replacementRange()
         val cursor = cursorAfter(s, text, newCursorPosition)
         clearComposing()
@@ -362,6 +374,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     }
 
     fun deleteSurroundingText(before: Int, after: Int, now: Long) = batch {
+        if (composingStart < 0 && selection.isCollapsed && (before > 0) != (after > 0) && deleteObjectAtCaret(backward = before > 0, now)) return@batch
         if (before > 0 && after == 0 && composingStart < 0 && removeParagraphMarkAtCaret(now)) return@batch
         val text = document.text
         val n = document.length
@@ -687,6 +700,33 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         }
     }
 
+    /**
+     * A picture below the paragraph the caret is in, as a paragraph of its own, and the caret
+     * on a new line after it; an empty line takes the picture itself. [handle] is the app's
+     * name for the picture ([PictureSource]).
+     */
+    fun insertPicture(handle: Int, now: Long) {
+        if (!editable) return
+        val p = document.paragraphAt(selection.end)
+        val empty = document.paragraphStart(p) == document.paragraphEnd(p) && !document.paragraphStyle(p).isObject
+        if (empty) {
+            val at = document.paragraphStart(p)
+            select(Selection(at), now)
+            type("\uFFFC\n", now)
+            formatEdit(now) {
+                document.setParagraphStyle(p, ParagraphStyle(picture = handle))
+                document.setParagraphStyle(p + 1, ParagraphStyle.DEFAULT)
+            }
+            return
+        }
+        select(Selection(document.paragraphEnd(p)), now)
+        type("\n\uFFFC\n", now)
+        formatEdit(now) {
+            document.setParagraphStyle(p + 1, ParagraphStyle(picture = handle))
+            document.setParagraphStyle(p + 2, ParagraphStyle.DEFAULT)
+        }
+    }
+
     /** Line height as a multiple of normal (1, 1.15, 1.5, 2) for the selected paragraphs. */
     fun setLineSpacing(multiple: Float, now: Long) {
         val stored = if (multiple == 1f) 0f else multiple
@@ -790,6 +830,66 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         return true
     }
 
+    // --- Pictures and dividers --------------------------------------------------------------
+
+    /**
+     * Backspace or Delete beside a picture or divider takes the whole of it, its line
+     * included, in one step: one keystroke, one thing gone, never a picture's line joined to
+     * the text beside it.
+     */
+    private fun deleteObjectAtCaret(backward: Boolean, now: Long): Boolean {
+        val at = selection.start
+        val p = document.paragraphAt(at)
+        val start = document.paragraphStart(p)
+        val end = document.paragraphEnd(p)
+        // An empty line below a picture goes first, leaving the caret after the picture; the
+        // next Backspace takes the picture. A picture is never one stray keystroke from gone.
+        if (backward && at == start && start == end && p > 0 && document.paragraphStyle(p - 1).isObject) {
+            clearComposing()
+            edit(start - 1, start, "", Selection(start - 1), now, mergeable = false, fromInput = true)
+            return true
+        }
+        val target = when {
+            document.paragraphStyle(p).isObject -> p
+            backward && at == start && p > 0 && document.paragraphStyle(p - 1).isObject -> p - 1
+            !backward && at == end && p + 1 < document.paragraphCount && document.paragraphStyle(p + 1).isObject -> p + 1
+            else -> return false
+        }
+        val (from, to) = objectRange(target)
+        clearComposing()
+        edit(from, to, "", Selection(from), now, mergeable = false, fromInput = true)
+        return true
+    }
+
+    /** The text that holds paragraph [p] (an object) with one of the line breaks beside it. */
+    private fun objectRange(p: Int): Pair<Int, Int> {
+        val start = document.paragraphStart(p)
+        val end = document.paragraphEnd(p)
+        return when {
+            p + 1 < document.paragraphCount -> start to end + 1
+            p > 0 -> start - 1 to end
+            else -> start to end
+        }
+    }
+
+    /**
+     * Typing with the caret beside a picture or divider: the text goes on a line of its own,
+     * before it when the caret is before it, after it otherwise.
+     */
+    private fun leaveObjectParagraph(now: Long) {
+        val sel = selection
+        if (!sel.isCollapsed) return
+        val p = document.paragraphAt(sel.start)
+        if (!document.paragraphStyle(p).isObject) return
+        val start = document.paragraphStart(p)
+        clearComposing()
+        if (sel.start == start) edit(start, start, "\n", Selection(start), now, mergeable = false, fromInput = true)
+        else {
+            val end = document.paragraphEnd(p)
+            edit(end, end, "\n", Selection(end + 1), now, mergeable = false, fromInput = true)
+        }
+    }
+
     // --- Keys -----------------------------------------------------------------------------
 
     fun onKey(key: Key, shift: Boolean, word: Boolean, now: Long): Boolean {
@@ -798,6 +898,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         when (key) {
             Key.BACKSPACE -> {
                 if (!sel.isCollapsed) deleteSelection(now)
+                else if (deleteObjectAtCaret(backward = true, now)) {}
                 else if (removeParagraphMarkAtCaret(now)) {}
                 else if (sel.start > 0) {
                     val from = if (word) Boundaries.previousWordStart(text, sel.start) else Boundaries.previousCluster(text, sel.start)
@@ -807,6 +908,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             }
             Key.DELETE -> {
                 if (!sel.isCollapsed) deleteSelection(now)
+                else if (deleteObjectAtCaret(backward = false, now)) {}
                 else if (sel.end < document.length) {
                     val to = if (word) Boundaries.nextWordEnd(text, sel.end) else Boundaries.nextCluster(text, sel.end)
                     clearComposing()
@@ -1296,6 +1398,23 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         }
     }
 
+    /**
+     * A picture at its size in its line, or an empty frame while it is decoded; when it is
+     * selected, the selection's colour lies over it, see-through.
+     */
+    private fun drawPicture(list: DrawList, handle: Int, pl: ParagraphLayout, top: Float, base: Int) {
+        val x = originX + pl.glyphX(0, 0)
+        val y = top + pl.lineTop(0) + pl.objectTop
+        val w = pl.objectWidth
+        val h = pl.objectHeight
+        val image = pictures?.image(handle, Math.round(w), Math.round(h))
+        if (image != null) list.image(image, x, y) else list.rect(x, y, w, h, style.codeBackground)
+        val sel = selection
+        if (!sel.isCollapsed && sel.start <= base && sel.end > base) {
+            list.rect(x, y, w, h, (style.selectionColor and 0x00FFFFFF) or 0x66000000)
+        }
+    }
+
     /** Find's markers on one line: the line's full height, as a highlighter would draw. */
     private fun drawMatches(list: DrawList, pl: ParagraphLayout, line: Int, base: Int, ls: Int, le: Int, lineTop: Float, lineHeight: Float) {
         if (matches.isEmpty()) return
@@ -1332,6 +1451,10 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val done = pstyle.list == ListType.CHECKBOX && pstyle.checked
         drawBlock(list, p, pstyle, pl, top)
         if (pstyle.role == Role.DIVIDER) return
+        if (pl.objectHeight > 0f) {
+            drawPicture(list, pstyle.picture, pl, top, base)
+            return
+        }
         drawListMarker(list, p, pstyle, originX + markerLeft(pl), top + pl.baseline(0), runs.sizes[0], pl.rtl)
 
         var g = 0

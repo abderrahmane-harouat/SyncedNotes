@@ -48,7 +48,15 @@ data class ParagraphStyle(
     val lineSpacing: Float = 0f,
     /** Only meaningful for a checklist item. */
     val checked: Boolean = false,
+    /**
+     * The picture the paragraph shows, as the app's handle for it ([PictureSource]); 0 for
+     * none. A picture is a paragraph of its own, holding one U+FFFC, as a divider is.
+     */
+    val picture: Int = 0,
 ) {
+    /** A paragraph that is one thing rather than text: a divider or a picture. */
+    val isObject: Boolean get() = role == Role.DIVIDER || picture != 0
+
     val list: ListType
         get() = when {
             role == Role.CHECKLIST -> ListType.CHECKBOX

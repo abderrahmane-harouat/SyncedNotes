@@ -12,6 +12,7 @@ import java.nio.file.Files
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
+import kotlin.test.assertNotNull
 import kotlin.test.assertNull
 import kotlin.test.assertTrue
 import kotlinx.coroutines.CoroutineScope
@@ -86,12 +87,13 @@ class NotesModelTest {
     }
 
     @Test
-    fun aNoteWithAPictureIsShownButNeverSavedOver() {
+    fun aNoteWithAPictureAmidTextIsShownButNeverSavedOver() {
         val model = unlocked()
         val id = newId()
+        // One on a line of its own is the engine's; one amid text is not yet.
         val picture = Note.newBuilder().setFormatVersion(1).addParagraphs(Paragraph.newBuilder().setText("Photo")).addParagraphs(
-            Paragraph.newBuilder().setText("￼").addRuns(
-                Run.newBuilder().setLength(1).setEmbedded(Embedded.newBuilder().setPicture(Picture.newBuilder().setId(ByteString.copyFrom(ByteArray(16))).setType("public.png"))),
+            Paragraph.newBuilder().setText("See ￼").addRuns(
+                Run.newBuilder().setStart(4).setLength(1).setEmbedded(Embedded.newBuilder().setPicture(Picture.newBuilder().setId(ByteString.copyFrom(ByteArray(16))).setType("public.png"))),
             ),
         ).build()
         model.lock()
@@ -237,5 +239,30 @@ class NotesModelTest {
         assertNull(model.importToChoose)
         backup.delete()
         model.lock()
+    }
+
+    @Test
+    fun anInsertedPictureIsKeptLockedAndTheNoteStaysEditable() {
+        val model = unlocked()
+        model.newNote()
+        composer.type("Holiday", 0)
+        // A made-up 300 × 200 picture with a camera's leftovers: it is written afresh as JPEG.
+        val image = java.awt.image.BufferedImage(300, 200, java.awt.image.BufferedImage.TYPE_INT_RGB)
+        val file = Files.createTempFile("syncednotes-picture-", ".png").toFile()
+        javax.imageio.ImageIO.write(image, "png", file)
+        kotlinx.coroutines.runBlocking { model.insertPicture(file) }
+        model.saveNow()
+        val id = model.document!!.id
+        model.lock()
+        file.delete()
+        reopened().use { store ->
+            val note = store.load(id)
+            val picture = note.paragraphsList[1].runsList.single().embedded.picture
+            assertEquals("public.jpeg", picture.type)
+            assertEquals(150 to 100, picture.width to picture.height)
+            assertTrue(com.syncednotes.core.NoteFormat.canEdit(note))
+            val bytes = store.picture(picture.id)
+            assertNotNull(javax.imageio.ImageIO.read(java.io.ByteArrayInputStream(bytes)))
+        }
     }
 }

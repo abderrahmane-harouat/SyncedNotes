@@ -15,6 +15,11 @@ internal object Native {
     /** The new font's id, or a negative number when the bytes are not a font we can read. */
     @JvmStatic external fun loadFont(data: ByteBuffer, length: Int): Int
 
+    /** A picture's id for IMAGE, or a negative number when [data] does not hold width × height pixels. */
+    @JvmStatic external fun loadImage(data: ByteBuffer, width: Int, height: Int): Int
+
+    @JvmStatic external fun freeImage(id: Int): Int
+
     /** Writes unitsPerEm, ascender, descender, lineGap as four Ints into [out]. */
     @JvmStatic external fun fontMetrics(font: Int, out: ByteBuffer): Int
 

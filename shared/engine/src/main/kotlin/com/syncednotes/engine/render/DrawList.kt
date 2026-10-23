@@ -30,6 +30,12 @@ class DrawList {
         buffer.putInt(OP_RECT).putFloat(x).putFloat(y).putFloat(w).putFloat(h).putInt(argb)
     }
 
+    /** A picture from [Images.load], at its own size, its top-left corner at ([x], [y]). */
+    fun image(id: Int, x: Float, y: Float) {
+        ensure(16)
+        buffer.putInt(OP_IMAGE).putInt(id).putFloat(x).putFloat(y)
+    }
+
     /** Glyph origins are on the baseline, in view pixels. */
     fun glyphs(fontId: Int, size: Float, argb: Int, count: Int, glyphs: IntArray, xs: FloatArray, ys: FloatArray) {
         if (count == 0) return
@@ -50,6 +56,7 @@ class DrawList {
         const val OP_RECT = 1
         const val OP_GLYPHS = 2
         const val OP_PATH = 3
+        const val OP_IMAGE = 4
     }
 }
 

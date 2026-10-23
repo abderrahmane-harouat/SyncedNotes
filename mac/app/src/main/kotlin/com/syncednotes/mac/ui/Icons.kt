@@ -67,6 +67,12 @@ object Icons {
         "M19.5 9a4.5 4.5 0 0 1 0 6",
         "M4.5 15a4.5 4.5 0 0 1 0-6",
     )
+    val photo = icon(
+        "photo",
+        "M5 5h14a1.5 1.5 0 0 1 1.5 1.5v11A1.5 1.5 0 0 1 19 19H5a1.5 1.5 0 0 1-1.5-1.5v-11A1.5 1.5 0 0 1 5 5z",
+        "M3.5 16l5-5 4 4 2.5-2.5 5.5 5",
+        "M16.5 9a1.5 1.5 0 1 1-3 0a1.5 1.5 0 1 1 3 0z",
+    )
     val undo = icon("arrow.uturn.backward", "M9 14L4.5 9.5 9 5", "M4.5 9.5h10a5 5 0 0 1 0 10H11")
     val redo = icon("arrow.uturn.forward", "M15 14l4.5-4.5L15 5", "M19.5 9.5h-10a5 5 0 0 0 0 10H13")
     val appearance = icon("circle.lefthalf.filled", "M20.5 12a8.5 8.5 0 1 1-17 0a8.5 8.5 0 1 1 17 0z", filled = listOf("M12 3.5a8.5 8.5 0 0 0 0 17z"))

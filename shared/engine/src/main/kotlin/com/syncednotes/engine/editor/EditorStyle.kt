@@ -56,6 +56,8 @@ data class EditorStyle(
     val findCurrentColor: Int = 0xFFFF9F0A.toInt(),
     val findEdgeColor: Int = 0x66000000,
     val findEdge: Float = 1f,
+    /** Pixels per point, for a picture's own size: a picture is shown at its size unless wider than the note. */
+    val pictureScale: Float = 1f,
 ) {
     /** The default text size in pixels. */
     val textSize: Float get() = defaultSize * sizeUnit
@@ -118,6 +120,7 @@ data class EditorStyle(
                 findCurrentColor = if (dark) 0xCCFF9F0A.toInt() else 0xFFFF9F0A.toInt(),
                 findEdgeColor = if (dark) 0x99FFFFFF.toInt() else 0x66000000,
                 findEdge = 1f * density,
+                pictureScale = density,
             )
         }
 
@@ -173,6 +176,7 @@ data class EditorStyle(
             findCurrentColor = if (dark) 0xCCFF9F0A.toInt() else 0xFFFF9F0A.toInt(),
             findEdgeColor = if (dark) 0x99FFFFFF.toInt() else 0x66000000,
             findEdge = 1f * scale,
+            pictureScale = scale,
         )
     }
 }

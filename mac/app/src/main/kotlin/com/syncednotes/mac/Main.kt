@@ -78,6 +78,9 @@ private fun tryPairing(): Boolean = System.getProperty("syncednotes.tryPairing")
 /** A word for Find in Note to look for in the first note at launch, to look at its markers; made-up notes only. */
 private fun tryFind(): String? = System.getProperty("syncednotes.tryFind")?.takeIf { folderName() != REAL_FOLDER }
 
+/** A picture file to put into the first note at launch, to look at it; made-up notes only. */
+private fun tryPicture(): String? = System.getProperty("syncednotes.tryPicture")?.takeIf { folderName() != REAL_FOLDER }
+
 /** Text to type into a new note at launch, through the window's own events (SelfTest). */
 private fun selfTestText(): String? = System.getProperty("syncednotes.selfTest")?.takeIf { folderName() != REAL_FOLDER }
 
@@ -123,7 +126,7 @@ fun main() {
             val choose: (Appearance) -> Unit = { appearance = it; it.save() }
             val layout = remember { WindowLayout() }
             val editor = remember(scale, dark) { Editor(scale, dark) }
-            LaunchedEffect(editor) { model.editorAppeared(editor.composer) }
+            LaunchedEffect(editor) { model.editorAppeared(editor.composer, editor::requestFrame) }
             // Typed text reaches the note this way (see MacTextInput).
             DisposableEffect(editor) {
                 val input = MacTextInput { editor.composer }
@@ -134,6 +137,10 @@ fun main() {
             LaunchedEffect(Unit) {
                 KeepOnThisMac.install(allowCapture())
                 tryPassphrase()?.let { model.unlock(it) }
+                tryPicture()?.let {
+                    delay(800)
+                    model.insertPicture(File(it))
+                }
                 tryFind()?.let {
                     delay(800)
                     editor.findText = it
@@ -162,10 +169,14 @@ fun main() {
                     SelfTest.clickAndType(window, window.width - 300, 200, text)
                 }
             }
-            Menus(model, editor, layout, appearance, choose)
+            Menus(model, editor, layout, appearance, choose, scope)
             CompositionLocalProvider(LocalClipboard provides MacOnlyClipboard, LocalClipboardManager provides MacOnlyClipboard) {
                 MacTheme(dark) {
-                    NotesWindow(model, editor, layout, appearance, choose, onExport = { exportBackup(model) }, onImport = { importBackup(model) })
+                    NotesWindow(
+                        model, editor, layout, appearance, choose,
+                        onExport = { exportBackup(model) }, onImport = { importBackup(model) },
+                        onInsertPicture = { insertPicture(model, scope) },
+                    )
                 }
             }
         }
@@ -189,9 +200,18 @@ private fun FrameWindowScope.importBackup(model: NotesModel) {
     model.importBackup(File(dialog.directory, name))
 }
 
+/** Asks for a picture file and puts it in the open note. */
+private fun FrameWindowScope.insertPicture(model: NotesModel, scope: kotlinx.coroutines.CoroutineScope) {
+    val dialog = FileDialog(window, "Insert Picture", FileDialog.LOAD)
+    dialog.setFilenameFilter { _, name -> name.substringAfterLast('.').lowercase() in setOf("png", "jpg", "jpeg", "gif", "bmp") }
+    dialog.isVisible = true
+    val name = dialog.file ?: return
+    scope.launch { model.insertPicture(File(dialog.directory, name)) }
+}
+
 /** The File and Format menus, with the Swift app's shortcuts. */
 @androidx.compose.runtime.Composable
-private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor, layout: WindowLayout, appearance: Appearance, onAppearance: (Appearance) -> Unit) {
+private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor, layout: WindowLayout, appearance: Appearance, onAppearance: (Appearance) -> Unit, scope: kotlinx.coroutines.CoroutineScope) {
     val unlocked = model.phase == NotesModel.Phase.Unlocked
     val editing = unlocked && model.document?.let { it.editable && !it.inTrash } == true
     val c = editor.composer
@@ -255,6 +275,7 @@ private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor, layout: Wi
             CheckboxItem("Block Quote", checked = state?.role == Role.QUOTE, shortcut = KeyShortcut(Key.Apostrophe, meta = true), enabled = editing, onCheckedChange = { act { c.toggleRole(Role.QUOTE, now()) }() })
             CheckboxItem("Code Block", checked = state?.role == Role.CODE_BLOCK, enabled = editing, onCheckedChange = { act { c.toggleRole(Role.CODE_BLOCK, now()) }() })
             Item("Insert Divider", shortcut = KeyShortcut(Key.D, meta = true, shift = true), enabled = editing, onClick = act { c.insertDivider(now()) })
+            Item("Insert Picture…", shortcut = KeyShortcut(Key.P, meta = true, shift = true), enabled = editing, onClick = { insertPicture(model, scope) })
             Separator()
             @androidx.compose.runtime.Composable fun style(title: String, style: CharStyle, shortcut: KeyShortcut?) =
                 CheckboxItem(title, checked = state?.has(style) == true, shortcut = shortcut, enabled = editing, onCheckedChange = { act { c.toggle(style, now()) }() })

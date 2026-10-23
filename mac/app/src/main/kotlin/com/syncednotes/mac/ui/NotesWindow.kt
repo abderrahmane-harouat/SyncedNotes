@@ -47,6 +47,7 @@ fun NotesWindow(
     onAppearance: (Appearance) -> Unit,
     onExport: () -> Unit,
     onImport: () -> Unit,
+    onInsertPicture: () -> Unit,
 ) {
     val c = colors
     var question by remember { mutableStateOf<Question?>(null) }
@@ -74,7 +75,7 @@ fun NotesWindow(
                         modifier = Modifier.width(layout.listWidth.dp),
                     )
                     Divider()
-                    EditorPane(model, editor, appearance, onAppearance, onConfirmDelete = { question = Question.DeleteNotes(it) }, modifier = Modifier.weight(1f))
+                    EditorPane(model, editor, appearance, onAppearance, onConfirmDelete = { question = Question.DeleteNotes(it) }, onInsertPicture = onInsertPicture, modifier = Modifier.weight(1f))
                 }
                 // The edges between the columns can be dragged. Their handles lie over the lines,
                 // wider than them, so they are easy to catch.

@@ -24,6 +24,11 @@ pub const SHAPED_GLYPH_BYTES: usize = 24;
 pub const OP_RECT: i32 = 1;
 pub const OP_GLYPHS: i32 = 2;
 pub const OP_PATH: i32 = 3;
+pub const OP_IMAGE: i32 = 4;
+
+/// The largest picture the engine keeps: a note's picture is decoded by the platform at the
+/// size it is shown, which is never near this.
+const MAX_IMAGE_SIDE: usize = 8192;
 
 pub const SEG_MOVE: i32 = 0;
 pub const SEG_LINE: i32 = 1;
@@ -50,10 +55,18 @@ pub struct Engine {
     fonts: Vec<Font>,
     glyphs: HashMap<GlyphKey, GlyphMask>,
     shaped: Vec<ShapedGlyph>,
+    /// A note's pictures, each at the size it is shown, as the platform decoded it.
+    images: HashMap<i32, crate::png::Image>,
+    next_image: i32,
 }
 
-static ENGINE: LazyLock<Mutex<Engine>> =
-    LazyLock::new(|| Mutex::new(Engine { fonts: Vec::new(), glyphs: HashMap::new(), shaped: Vec::new() }));
+impl Engine {
+    fn new() -> Engine {
+        Engine { fonts: Vec::new(), glyphs: HashMap::new(), shaped: Vec::new(), images: HashMap::new(), next_image: 1 }
+    }
+}
+
+static ENGINE: LazyLock<Mutex<Engine>> = LazyLock::new(|| Mutex::new(Engine::new()));
 
 pub fn with_engine<R>(f: impl FnOnce(&mut Engine) -> R) -> R {
     // A panic while holding the lock leaves only caches behind, never half-written pixels
@@ -110,6 +123,24 @@ impl Engine {
             }
             None => -1,
         }
+    }
+
+    /// Keeps a picture, premultiplied RGBA rows of [width] pixels, to draw with IMAGE; returns
+    /// its id, or -1 when the bytes do not make a picture of that size.
+    pub fn load_image(&mut self, rgba: &[u8], width: i32, height: i32) -> i32 {
+        let (Ok(w), Ok(h)) = (usize::try_from(width), usize::try_from(height)) else { return -1 };
+        if w == 0 || h == 0 || w > MAX_IMAGE_SIDE || h > MAX_IMAGE_SIDE || rgba.len() != w * h * 4 {
+            return -1;
+        }
+        let id = self.next_image;
+        self.next_image += 1;
+        self.images.insert(id, crate::png::Image { width: w, height: h, rgba: rgba.to_vec() });
+        id
+    }
+
+    /// Forgets a picture; drawing it afterwards draws nothing.
+    pub fn free_image(&mut self, id: i32) {
+        self.images.remove(&id);
     }
 
     /// unitsPerEm, ascender, descender, lineGap, underline position and thickness,
@@ -185,6 +216,7 @@ impl Engine {
     ///   where (x, y) is the glyph origin on the baseline, in target pixels
     /// - PATH: u32 argb; i32 segments; each an i32 kind then 2 (move, line), 4 (quad) or
     ///   0 (close) f32 coordinates
+    /// - IMAGE: i32 id from load_image; f32 x, y of its top-left corner
     /// Returns 0, or -1 if the list was malformed (everything before the fault is drawn).
     pub fn render(&mut self, target: &mut Target, clip: Clip, commands: &[u8]) -> i32 {
         let mut r = Reader::new(commands);
@@ -193,6 +225,7 @@ impl Engine {
                 Some(OP_RECT) => self.rect(&mut r, target, clip),
                 Some(OP_GLYPHS) => self.glyph_run(&mut r, target, clip),
                 Some(OP_PATH) => Self::path(&mut r, target, clip),
+                Some(OP_IMAGE) => self.image(&mut r, target, clip),
                 _ => None,
             };
             if ok.is_none() {
@@ -200,6 +233,16 @@ impl Engine {
             }
         }
         0
+    }
+
+    /// A picture at its own size with its top-left at (x, y). One that was freed draws
+    /// nothing rather than failing the frame: the note may still be on its way out.
+    fn image(&mut self, r: &mut Reader, target: &mut Target, clip: Clip) -> Option<()> {
+        let (id, x, y) = (r.i32()?, r.f32()?, r.f32()?);
+        if let Some(image) = self.images.get(&id) {
+            target.blend_image(clip, x.round() as i32, y.round() as i32, image, 255);
+        }
+        Some(())
     }
 
     fn rect(&mut self, r: &mut Reader, target: &mut Target, clip: Clip) -> Option<()> {
@@ -311,7 +354,7 @@ mod tests {
 
     fn engine_with_roboto() -> (Engine, i32) {
         let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../assets/fonts/Roboto-Regular.ttf");
-        let mut e = Engine { fonts: Vec::new(), glyphs: HashMap::new(), shaped: Vec::new() };
+        let mut e = Engine::new();
         let id = e.load_font(&std::fs::read(path).unwrap());
         (e, id)
     }
@@ -398,5 +441,31 @@ mod tests {
         let all = t.bounds();
         assert_eq!(e.render(&mut t, all, &cmds), -1);
         assert_eq!(t.pixel(0, 0), [255, 0, 0, 255]);
+    }
+
+    #[test]
+    fn a_picture_is_drawn_at_its_place_and_a_freed_one_draws_nothing() {
+        let mut e = Engine::new();
+        // 2 x 1 premultiplied RGBA: opaque red, then opaque blue.
+        let id = e.load_image(&[255, 0, 0, 255, 0, 0, 255, 255], 2, 1);
+        assert!(id > 0);
+        assert_eq!(e.load_image(&[0; 7], 2, 1), -1);
+        let mut pixels = vec![0u8; 4 * 4 * 4];
+        let mut cmds = Vec::new();
+        cmds.extend(OP_IMAGE.to_le_bytes());
+        cmds.extend(id.to_le_bytes());
+        cmds.extend(1f32.to_le_bytes());
+        cmds.extend(2f32.to_le_bytes());
+        {
+            let mut target = Target::new(&mut pixels, 4, 4, 16).unwrap();
+            assert_eq!(e.render(&mut target, Clip { left: 0, top: 0, right: 4, bottom: 4 }, &cmds), 0);
+        }
+        assert_eq!(&pixels[2 * 16 + 4..2 * 16 + 8], &[255, 0, 0, 255]);
+        assert_eq!(&pixels[2 * 16 + 8..2 * 16 + 12], &[0, 0, 255, 255]);
+        e.free_image(id);
+        let mut blank = vec![0u8; 4 * 4 * 4];
+        let mut target = Target::new(&mut blank, 4, 4, 16).unwrap();
+        assert_eq!(e.render(&mut target, Clip { left: 0, top: 0, right: 4, bottom: 4 }, &cmds), 0);
+        assert!(blank.iter().all(|&b| b == 0));
     }
 }

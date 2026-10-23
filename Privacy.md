@@ -152,6 +152,11 @@ keyboard learning sees a note), the same lock and store as the Mac, and the same
   incognito mark; a passphrase shown with the eye is a visible password, which they treat the
   same way), and every window is closed to autofill services and to content capture,
   which would hand what is on screen to another app or the system's intelligence.
+- **Pictures** come from the system's photo picker, which hands the app only the one chosen
+  and needs no permission to read the others. Every picture, on the phone or the Mac, is
+  written afresh before it is kept, so a photo's location, date and camera never enter a note;
+  it is decoded on the device itself (Android's decoder, the JDK's ImageIO), and locked like a
+  note.
 - **The network**: Android's `INTERNET` permission, which it requires for any socket, local
   ones included. The phone finds the Mac with Network Service Discovery (multicast DNS on the
   local network) and refuses any address outside it, as the Mac does.

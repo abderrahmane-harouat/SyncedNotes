@@ -26,6 +26,9 @@ and is never saved over), rich copy and paste, dragging notes onto folders, typi
   italic, underline and strikethrough; highlights and text colours. Arabic and other
   right-to-left text runs in its own direction.
 - **A new note starts as its title.** Press Return and the body follows.
+- **The same tools on the Mac and the phone**: paragraph styles, four kinds of list,
+  alignment, quotes, code, dividers, line spacing, the same text colours and highlights, and
+  pictures (Insert Picture on the Mac, the picture button on the phone).
 - **Folders, inside folders.** Drag notes onto a folder, or right-click a note and choose
   Move To. Select several notes with ⌘-click or ⇧-click to move or delete them together.
 - **A Trash.** Deleted notes stay there for 30 days and can be restored.

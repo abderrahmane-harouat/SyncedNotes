@@ -19,6 +19,9 @@ import com.syncednotes.engine.editor.Composer
 import com.syncednotes.engine.text.ParagraphStyle
 import com.syncednotes.engine.text.Role
 import com.syncednotes.core.NoteFormat
+import com.syncednotes.core.PictureCache
+import com.syncednotes.core.PictureHandles
+import com.syncednotes.core.addPicture
 import com.syncednotes.core.sync.Discovery
 import com.syncednotes.core.sync.SyncRole
 import com.syncednotes.core.sync.SyncService
@@ -160,6 +163,10 @@ class NotesModel(
         )
     }
 
+    /** The open note's pictures, decoded on this Mac at the size they are shown. */
+    private val pictures = PictureCache({ store }, MacPictures) { pictureFrame() }
+    private var pictureFrame: () -> Unit = {}
+
     /** Whether the Pair a Phone sheet is open. */
     var pairingPhone by mutableStateOf(false)
 
@@ -237,6 +244,7 @@ class NotesModel(
     fun lock() {
         leaveCurrentNote()
         sync?.detach()
+        pictures.clear()
         pairingPhone = false
         store?.close()
         store = null
@@ -254,13 +262,18 @@ class NotesModel(
 
     // --- The editor -----------------------------------------------------------------------
 
-    /** The engine on screen. Its document's changes are what gets saved. */
-    fun editorAppeared(composer: Composer) {
+    /**
+     * The engine on screen. Its document's changes are what gets saved. [requestFrame] draws it
+     * again, for a picture that finished decoding.
+     */
+    fun editorAppeared(composer: Composer, requestFrame: () -> Unit = {}) {
         if (editor === composer) return
         // A new engine (the appearance changed) loads the note again: save what the old one
         // holds first, or the typing since the last save would be lost.
         saveNow()
         editor = composer
+        pictureFrame = requestFrame
+        composer.pictures = pictures
         composer.document.addListener { if (!loading) contentChanged() }
         composer.document.addFormatListener { _, _ -> if (!loading) contentChanged() }
         editorNote = null
@@ -654,6 +667,8 @@ class NotesModel(
     fun remoteChanged(ids: Set<Id>) {
         val store = store ?: return
         refresh()
+        // A note's pictures may have come after it.
+        pictures.retryMissing()
         val open = document ?: return
         if (open.id !in ids || unsaved) return
         if (store.isDeleted(open.id)) {
@@ -667,6 +682,32 @@ class NotesModel(
             showInEditor()
         } catch (e: Exception) {
             problem = "The note from the phone could not be opened: ${e.message}"
+        }
+    }
+
+    // --- Pictures --------------------------------------------------------------------------
+
+    /**
+     * Puts the picture in [file] into the open note, below the caret's line: written afresh
+     * first (MacPictures.prepare), then locked in the store like any picture, which sync then
+     * carries to the phone. The slow part runs away from the window's thread.
+     */
+    suspend fun insertPicture(file: File) {
+        val store = store ?: return
+        val composer = editor ?: return
+        val open = document ?: return
+        if (open.inTrash || !open.editable) return
+        val prepared = withContext(Dispatchers.IO) { runCatching { MacPictures.prepare(file.readBytes()) }.getOrNull() }
+        if (prepared == null) {
+            problem = "“${file.name}” is not a picture this Mac can read."
+            return
+        }
+        try {
+            // Its size in points: the pixels of a Retina screen's picture, halved.
+            val picture = withContext(Dispatchers.IO) { store.addPicture(prepared.bytes, (prepared.width + 1) / 2, (prepared.height + 1) / 2) }
+            composer.insertPicture(PictureHandles.handle(picture), now())
+        } catch (e: Exception) {
+            problem = "The picture could not be added: ${e.message}"
         }
     }
 

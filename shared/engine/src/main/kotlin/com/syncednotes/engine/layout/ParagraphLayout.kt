@@ -33,7 +33,17 @@ class ParagraphLayout(
     private val levels: ByteArray? = null,
     /** The paragraph's level: 1 when it runs right to left. */
     private val baseLevel: Int = 0,
+    /**
+     * For a picture: its height as drawn. Its one line is that tall, with half a line of text
+     * spread above and below; the picture's width is its one glyph's advance.
+     */
+    val objectHeight: Float = 0f,
 ) {
+    /** Where the picture's top is in its line. */
+    val objectTop: Float
+    /** The picture's width as drawn. */
+    val objectWidth: Float = if (objectHeight > 0f && run.count > 0) run.advances[0] else 0f
+
     /** Whether the paragraph runs right to left: its lists and indents are on the right. */
     val rtl: Boolean get() = baseLevel % 2 == 1
 
@@ -103,14 +113,23 @@ class ParagraphLayout(
             }
             val ascent = size * ascentPerPx
             val descent = size * descentPerPx
-            val h = size * lineSpacing
             lineTops[line] = y
-            lineHeights[line] = h
-            lineBaselines[line] = (h - (ascent + descent)) / 2f + ascent
+            if (objectHeight > 0f) {
+                // The caret beside a picture stands at its foot, as next to a tall letter.
+                val gap = size * 0.5f
+                lineHeights[line] = objectHeight + gap
+                lineBaselines[line] = gap / 2f + objectHeight
+            } else {
+                val h = size * lineSpacing
+                lineHeights[line] = h
+                lineBaselines[line] = (h - (ascent + descent)) / 2f + ascent
+            }
+            val h = lineHeights[line]
             lineSizes[line] = size
             y += h
         }
         height = y
+        objectTop = if (objectHeight > 0f) lineSizes.firstOrNull()?.let { it * 0.25f } ?: 0f else 0f
     }
 
     private fun widthOf(start: Int, end: Int): Float {

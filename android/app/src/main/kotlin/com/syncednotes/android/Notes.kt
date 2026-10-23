@@ -11,6 +11,9 @@ import com.syncednotes.core.Id
 import com.syncednotes.core.LockException
 import com.syncednotes.core.NoteStore
 import com.syncednotes.core.PassphraseChange
+import com.syncednotes.core.PictureCache
+import com.syncednotes.core.PictureHandles
+import com.syncednotes.core.addPicture
 import com.syncednotes.core.SqlOpener
 import com.syncednotes.core.SyncIdentity
 import com.syncednotes.core.SyncPeer
@@ -50,8 +53,20 @@ class Notes(private val app: Application) {
         deviceName = ::deviceName,
         discovery = NsdDiscovery(app),
         scope = scope,
-        onRemoteChange = { ids -> main.post { remoteListeners.forEach { it(ids) } } },
+        onRemoteChange = { ids ->
+            // A note's pictures may have come after it.
+            pictures.retryMissing()
+            main.post { remoteListeners.forEach { it(ids) } }
+        },
     )
+
+    /** The open note's pictures, decoded on the phone at the size they are shown. */
+    val pictures = PictureCache({ store }, AndroidPictures) { main.post { pictureListeners.forEach { it() } } }
+    private val pictureListeners = CopyOnWriteArrayList<() -> Unit>()
+
+    /** Called on the main thread when a picture finished decoding, to draw it. */
+    fun addPictureListener(listener: () -> Unit) = pictureListeners.add(listener)
+    fun removePictureListener(listener: () -> Unit) = pictureListeners.remove(listener)
 
     private val listeners = CopyOnWriteArrayList<() -> Unit>()
     private val remoteListeners = CopyOnWriteArrayList<(Set<Id>) -> Unit>()
@@ -105,6 +120,7 @@ class Notes(private val app: Application) {
         sync.detach()
         watching?.cancel()
         store = null
+        pictures.clear()
         runCatching { opened.close() }
         if (tell) changed()
     }
@@ -173,6 +189,19 @@ class Notes(private val app: Application) {
         }
         open(runCatching { unlockVault(home, new) }.getOrElse { unlockVault(home, current) })
         if (!vault.header.id.contentEquals(store!!.vault.header.id)) throw IllegalStateException("The passphrase was not changed; your notes are as they were.")
+    }
+
+    /**
+     * Keeps a picture the user chose: written afresh (AndroidPictures.prepare), then locked in
+     * the store like any picture, which sync carries to the Mac. Returns the engine's handle
+     * for it, or null when it is not a picture. Slow: off the main thread.
+     */
+    fun addPicture(bytes: ByteArray): Int? {
+        val opened = store ?: return null
+        val prepared = AndroidPictures.prepare(bytes) ?: return null
+        // Its size in points, as the Mac counts them: pixels of a sharp screen, halved.
+        val picture = opened.addPicture(prepared.bytes, (prepared.width + 1) / 2, (prepared.height + 1) / 2)
+        return PictureHandles.handle(picture)
     }
 
     fun deviceName(): String =

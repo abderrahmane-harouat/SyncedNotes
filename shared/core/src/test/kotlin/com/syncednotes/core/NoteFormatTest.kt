@@ -82,10 +82,26 @@ class NoteFormatTest {
     }
 
     @Test
-    fun aNoteWithAPictureOrATableIsNotEditableYet() {
+    fun aPictureOnALineOfItsOwnIsEditedAndComesBackTheSame() {
+        val stored = Picture.newBuilder().setId(ByteString.copyFrom(ByteArray(16) { 4 })).setType("public.jpeg").setWidth(800).setHeight(600)
+        val note = note(
+            paragraph("Above"),
+            paragraph("￼").addRuns(run(0, 1).setEmbedded(Embedded.newBuilder().setPicture(stored))),
+            paragraph("Below"),
+        )
+        assertTrue(NoteFormat.canEdit(note))
+        val document = decoded(note)
+        val handle = document.paragraphStyle(1).picture
+        assertTrue(handle != 0)
+        assertEquals(stored.build(), PictureHandles.picture(handle))
+        assertEquals(note, NoteFormat().encode(document))
+    }
+
+    @Test
+    fun aPictureAmidTextOrATableIsNotEditableYet() {
         val picture = note(
-            paragraph("￼").addRuns(
-                run(0, 1).setEmbedded(Embedded.newBuilder().setPicture(Picture.newBuilder().setId(ByteString.copyFrom(ByteArray(16))).setType("public.png"))),
+            paragraph("See ￼ here").addRuns(
+                run(4, 1).setEmbedded(Embedded.newBuilder().setPicture(Picture.newBuilder().setId(ByteString.copyFrom(ByteArray(16))).setType("public.png"))),
             ),
         )
         val table = note(paragraph("￼").addRuns(run(0, 1).setEmbedded(Embedded.newBuilder().setTable(Table.newBuilder().addRows(Row.getDefaultInstance())))))

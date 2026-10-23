@@ -39,6 +39,10 @@ class DocumentLayout(
     private val listMarkerWidth: Float,
     private val quoteIndent: Float = 0f,
     private val codeIndent: Float = 0f,
+    /** Pixels per point for a picture's own size, which it is shown at unless the note is narrower. */
+    private val pictureScale: Float = 1f,
+    /** A picture's own size in points, by handle; null when unknown. */
+    var pictureSize: (Int) -> Pair<Int, Int>? = { null },
 ) {
     private val shapers = HashMap<FontStack, Shaper>()
     private val markerRuns = HashMap<Pair<String, Float>, ShapedRun>()
@@ -140,6 +144,15 @@ class DocumentLayout(
         // A right-to-left paragraph has its indent, list markers and quote bar on the right.
         val (textLeft, textRight) = if (baseLevel % 2 == 1) endMargin to startMargin else startMargin to endMargin
         val spacing = lineSpacing * (if (style.lineSpacing > 0f) style.lineSpacing else 1f)
+        if (style.picture != 0 && text == OBJECT_TEXT) {
+            val (w, h) = pictureBox(style.picture, width - textLeft - textRight)
+            val run = ShapedRun(1, intArrayOf(-1), intArrayOf(0), intArrayOf(0), floatArrayOf(w), floatArrayOf(0f), floatArrayOf(0f))
+            val layout = ParagraphLayout(
+                text, run, runs, width, ascentPerPx, descentPerPx, spacing, textLeft, style.alignment, textRight, null, 0, objectHeight = h,
+            )
+            paragraphs[index] = layout
+            return layout
+        }
         val layout = ParagraphLayout(
             text, concatenate(parts), runs, width, ascentPerPx, descentPerPx, spacing, textLeft, style.alignment, textRight,
             levels, baseLevel,
@@ -196,6 +209,24 @@ class DocumentLayout(
             highlights[r] = value(ValueStyle.HIGHLIGHT) ?: 0
         }
         return StyleRuns(starts, flags, sizes, colors, highlights, length)
+    }
+
+    /**
+     * The size a picture is drawn at: its own, in points, unless that is wider than the note,
+     * when it shrinks to fit; never enlarged. One of unknown size takes the width, at 4:3.
+     */
+    private fun pictureBox(picture: Int, available: Float): Pair<Float, Float> {
+        val room = available.coerceAtLeast(1f)
+        val (pw, ph) = pictureSize(picture) ?: return room to room * 0.75f
+        if (pw <= 0 || ph <= 0) return room to room * 0.75f
+        val w = minOf(pw * pictureScale, room)
+        return w to w * ph / pw
+    }
+
+    /** Forgets every paragraph's layout: pictures' sizes became known, say. */
+    fun invalidate() {
+        for (i in paragraphs.indices) paragraphs[i] = null
+        topsValid = false
     }
 
     private fun faceOf(flags: Int): FontStack = fonts.stack(
@@ -299,3 +330,6 @@ fun roleScale(role: Role): Float = when (role) {
     Role.SUBHEADING -> 19f / 16f
     else -> 1f
 }
+
+/** A picture's or divider's paragraph text: the one U+FFFC. */
+private const val OBJECT_TEXT = "\uFFFC"

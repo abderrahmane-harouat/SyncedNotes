@@ -54,6 +54,7 @@ fun EditorPane(
     appearance: Appearance,
     onAppearance: (Appearance) -> Unit,
     onConfirmDelete: (Set<Id>) -> Unit,
+    onInsertPicture: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = colors
@@ -70,7 +71,7 @@ fun EditorPane(
             // them all, as the phone's toolbar does, rather than running off its edge.
             Box(Modifier.weight(1f).padding(start = 8.dp), contentAlignment = Alignment.CenterEnd) {
                 if (open != null && open.editable && !open.inTrash) {
-                    Box(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) { FormatToolbar(editor) }
+                    Box(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) { FormatToolbar(editor, onInsertPicture) }
                 }
             }
         }
@@ -211,7 +212,7 @@ private fun moveItems(model: NotesModel, ids: Set<Id>): List<MenuItem> = buildLi
  * engine reports it, so it cannot disagree with the text.
  */
 @Composable
-private fun FormatToolbar(editor: Editor) {
+private fun FormatToolbar(editor: Editor, onInsertPicture: () -> Unit) {
     val c = colors
     val composer = editor.composer
     val state = editor.format
@@ -248,6 +249,9 @@ private fun FormatToolbar(editor: Editor) {
             }
             MenuPopup(colorMenu, { colorMenu = false }, colorItems(editor), offset = IntOffset(-120, 60))
         }
+        Gap()
+        // Samsung's attach button, for the one thing it attaches here: a picture.
+        ToolbarButton(Icons.photo, "Insert Picture (⇧⌘P)", onInsertPicture)
         Gap()
         ToolbarButton(Icons.undo, "Undo (⌘Z)", { composer.undo(now()); editor.focus.requestFocus() }, enabled = state?.canUndo == true)
         ToolbarButton(Icons.redo, "Redo (⇧⌘Z)", { composer.redo(now()); editor.focus.requestFocus() }, enabled = state?.canRedo == true)

@@ -1,6 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- The Mac app's notepad (Design/AppIcon-artwork.png), small enough inside the layer that
-     every launcher's mask, round or square, shows it whole. -->
+<!-- The Mac app's notepad (Design/AppIcon-artwork.png), the artwork at 62% of the layer (Scripts/make-phone-icon.js), so
+     the notepad fills about 70% of what a launcher shows, as it does in the Mac's icon; at
+     77% it filled 90% and looked zoomed in. -->
 <adaptive-icon xmlns:android="http://schemas.android.com/apk/res/android">
     <background android:drawable="@color/icon_background" />
     <foreground android:drawable="@mipmap/ic_launcher_foreground" />

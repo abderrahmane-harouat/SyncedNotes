@@ -2,6 +2,7 @@ package com.syncednotes.engine.editor
 
 import com.syncednotes.engine.layout.DocumentLayout
 import com.syncednotes.engine.layout.ParagraphLayout
+import com.syncednotes.engine.layout.StyleRuns
 import com.syncednotes.engine.render.DrawList
 import com.syncednotes.engine.render.FontFamily
 import com.syncednotes.engine.render.PathBuilder
@@ -9,6 +10,7 @@ import com.syncednotes.engine.layout.roleScale
 import com.syncednotes.engine.text.Alignment
 import com.syncednotes.engine.text.Boundaries
 import com.syncednotes.engine.text.CharStyle
+import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.Direction
 import com.syncednotes.engine.text.ListKind
 import com.syncednotes.engine.text.ListLevel
@@ -489,6 +491,8 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val role: Role? = Role.BODY,
         /** Line height as a multiple of normal; null when the paragraphs disagree. */
         val lineSpacing: Float? = 1f,
+        /** The language, when every paragraph is a code block in the same one; null otherwise. */
+        val codeLanguage: CodeLanguage? = null,
     ) {
         fun has(style: CharStyle): Boolean = when (style) {
             CharStyle.BOLD -> bold
@@ -532,6 +536,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             code = styleOn(CharStyle.CODE),
             role = styles.map { it.role }.distinct().singleOrNull(),
             lineSpacing = styles.map { if (it.lineSpacing == 0f) 1f else it.lineSpacing }.distinct().singleOrNull(),
+            codeLanguage = styles.takeIf { all -> all.all { it.role == Role.CODE_BLOCK } }?.map { it.language }?.distinct()?.singleOrNull(),
         )
     }
 
@@ -672,13 +677,56 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     fun toggleRole(role: Role, now: Long) {
         val range = selectedParagraphs()
         val target = if (role != Role.BODY && range.all { document.paragraphStyle(it).role == role }) Role.BODY else role
+        // Code joining a block above or below is in that block's language, as all of a block is.
+        val language = if (target == Role.CODE_BLOCK) neighbouringLanguage(range) else CodeLanguage.NONE
         formatEdit(now) {
             for (p in range) {
                 val s = document.paragraphStyle(p)
                 // A checklist item made a heading stops being an item; a list item keeps its list.
-                document.setParagraphStyle(p, s.copy(role = target, checked = s.checked && target == Role.CHECKLIST))
+                document.setParagraphStyle(p, s.copy(role = target, checked = s.checked && target == Role.CHECKLIST, language = language))
             }
         }
+    }
+
+    /**
+     * A code block in [language] for the selected paragraphs, which then colours its syntax.
+     * The whole of every block they touch takes the language, since a block is in one; a
+     * caret anywhere in a block changes all of it. Choosing the language the paragraphs are
+     * already code in puts them back to body text, as choosing a role they have does.
+     */
+    fun toggleCodeBlock(language: CodeLanguage, now: Long) {
+        val range = selectedParagraphs().filter { !document.paragraphStyle(it).isObject }
+        if (range.isEmpty()) return
+        if (range.all { document.paragraphStyle(it).let { s -> s.role == Role.CODE_BLOCK && s.language == language } }) {
+            formatEdit(now) {
+                for (p in range) document.setParagraphStyle(p, document.paragraphStyle(p).copy(role = Role.BODY, language = CodeLanguage.NONE))
+            }
+            return
+        }
+        var first = range.first()
+        while (first > 0 && document.paragraphStyle(first - 1).role == Role.CODE_BLOCK) first--
+        var last = range.last()
+        while (last + 1 < document.paragraphCount && document.paragraphStyle(last + 1).role == Role.CODE_BLOCK) last++
+        formatEdit(now) {
+            for (p in range) document.setParagraphStyle(p, document.paragraphStyle(p).copy(role = Role.CODE_BLOCK, checked = false))
+            for (p in first..last) {
+                val s = document.paragraphStyle(p)
+                if (s.role == Role.CODE_BLOCK) document.setParagraphStyle(p, s.copy(language = language))
+            }
+        }
+    }
+
+    /**
+     * The language of code already among [range], or of the block just above it, or else just
+     * below; NONE when there is none.
+     */
+    private fun neighbouringLanguage(range: IntRange): CodeLanguage {
+        range.map { document.paragraphStyle(it) }.firstOrNull { it.role == Role.CODE_BLOCK }?.let { return it.language }
+        val above = if (range.first > 0) document.paragraphStyle(range.first - 1) else null
+        if (above?.role == Role.CODE_BLOCK) return above.language
+        val below = if (range.last + 1 < document.paragraphCount) document.paragraphStyle(range.last + 1) else null
+        if (below?.role == Role.CODE_BLOCK) return below.language
+        return CodeLanguage.NONE
     }
 
     fun setAlignment(alignment: Alignment, now: Long) {
@@ -1510,7 +1558,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                 if (pl.clusters[g] >= ls) {
                     while (r + 1 < runs.count && runs.start(r + 1) <= pl.clusters[g]) r++
                     val size = runs.sizes[r]
-                    val color = textColor(runs.colors[r], done)
+                    val color = textColor(runs, r, done)
                     if (n > 0 && (pl.fontIds[g] != runFont || size != runSize || color != runColor)) {
                         list.glyphs(runFont, runSize, runColor, n, glyphIds, glyphXs, glyphYs)
                         n = 0
@@ -1531,7 +1579,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             // Underline and strikethrough, one stroke per styled stretch, sized to its text.
             forEachRun(pl, line) { i, x0, x1 ->
                 val size = runs.sizes[i]
-                val color = textColor(runs.colors[i], done)
+                val color = textColor(runs, i, done)
                 if (runs.has(i, CharStyle.UNDERLINE)) {
                     list.rect(x0, baselineY + size * unitMetrics.underlineOffset, x1 - x0, maxOf(1f, size * unitMetrics.underlineThickness), color)
                 }
@@ -1580,8 +1628,12 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         }
     }
 
-    private fun textColor(runColor: Int, done: Boolean): Int {
-        val color = if (runColor != 0) runColor else style.textColor
+    /** A run's colour: one picked by hand, else its syntax's in code, else the text colour. */
+    private fun textColor(runs: StyleRuns, r: Int, done: Boolean): Int {
+        val color = when {
+            runs.colors[r] != 0 -> runs.colors[r]
+            else -> runs.token(r)?.let { style.codeColors[it.ordinal] } ?: style.textColor
+        }
         if (!done) return color
         val alpha = ((color ushr 24) * style.checkedTextAlpha).toInt()
         return (alpha shl 24) or (color and 0xFFFFFF)

@@ -26,6 +26,12 @@ enum class Role { BODY, TITLE, HEADING, SUBHEADING, QUOTE, CODE_BLOCK, CHECKLIST
 enum class ListKind { BULLET, DASH, NUMBER }
 
 /**
+ * The language a code block is written in, which its syntax is coloured by. NONE is code
+ * shown as it is, monospaced in the text colour.
+ */
+enum class CodeLanguage(val title: String) { NONE("Plain"), C("C"), CPP("C++") }
+
+/**
  * One list a paragraph is an item of. Paragraphs next to each other with the same [id] at a
  * level are items of one list, so its numbering runs on; a different id starts a new list.
  * [start] is the number a numbered list starts at, 0 meaning 1.
@@ -53,6 +59,8 @@ data class ParagraphStyle(
      * none. A picture is a paragraph of its own, holding one U+FFFC, as a divider is.
      */
     val picture: Int = 0,
+    /** Only meaningful for a code block; every paragraph of one block has the same. */
+    val language: CodeLanguage = CodeLanguage.NONE,
 ) {
     /** A paragraph that is one thing rather than text: a divider or a picture. */
     val isObject: Boolean get() = role == Role.DIVIDER || picture != 0

@@ -1,8 +1,10 @@
 package com.syncednotes.engine.render
 
+import com.syncednotes.engine.code.TokenKind
 import com.syncednotes.engine.editor.PointerAction
 import com.syncednotes.engine.editor.PointerEvent
 import com.syncednotes.engine.newComposer
+import com.syncednotes.engine.text.CodeLanguage
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.test.Test
@@ -41,6 +43,22 @@ class RenderTest {
         assertTrue(px.darkPixels(0, 0, width, lineBottom) > 500, "text should be drawn")
         assertEquals(0, px.darkPixels(0, lineBottom, width, height), "nothing below the first line")
         assertEquals(c.style.background and 0xFFFFFF, px.rgb(width - 1, height - 1))
+    }
+
+    @Test
+    fun aKeywordInCCodeIsDrawnInTheKeywordColourAndPlainCodeIsNot() {
+        fun keywordPixels(language: CodeLanguage): Int {
+            val c = newComposer(height = height)
+            c.commitText("return", 1, 0)
+            c.toggleCodeBlock(language, 0)
+            val px = frame { c.render(it, 0) }
+            val keyword = c.style.codeColors[TokenKind.KEYWORD.ordinal] and 0xFFFFFF
+            var n = 0
+            for (y in 0 until height) for (x in 0 until width) if (px.rgb(x, y) == keyword) n++
+            return n
+        }
+        assertTrue(keywordPixels(CodeLanguage.C) > 100, "the keyword should be drawn in its colour")
+        assertEquals(0, keywordPixels(CodeLanguage.NONE))
     }
 
     @Test

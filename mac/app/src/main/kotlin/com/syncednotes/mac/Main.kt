@@ -23,6 +23,7 @@ import androidx.compose.ui.window.rememberWindowState
 import com.syncednotes.core.sync.SyncService
 import com.syncednotes.engine.text.Alignment
 import com.syncednotes.engine.text.CharStyle
+import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.ListType
 import com.syncednotes.engine.text.Role
 import com.syncednotes.mac.ui.MacTheme
@@ -273,7 +274,13 @@ private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor, layout: Wi
             )
             Separator()
             CheckboxItem("Block Quote", checked = state?.role == Role.QUOTE, shortcut = KeyShortcut(Key.Apostrophe, meta = true), enabled = editing, onCheckedChange = { act { c.toggleRole(Role.QUOTE, now()) }() })
-            CheckboxItem("Code Block", checked = state?.role == Role.CODE_BLOCK, enabled = editing, onCheckedChange = { act { c.toggleRole(Role.CODE_BLOCK, now()) }() })
+            // The language is what the block's syntax is coloured by; choosing the one it has
+            // already puts it back to body text, as choosing a role it has does.
+            Menu("Code Block", enabled = editing) {
+                for (language in CodeLanguage.entries) {
+                    CheckboxItem(language.title, checked = state?.codeLanguage == language, enabled = editing, onCheckedChange = { act { c.toggleCodeBlock(language, now()) }() })
+                }
+            }
             Item("Insert Divider", shortcut = KeyShortcut(Key.D, meta = true, shift = true), enabled = editing, onClick = act { c.insertDivider(now()) })
             Item("Insert Picture…", shortcut = KeyShortcut(Key.P, meta = true, shift = true), enabled = editing, onClick = { insertPicture(model, scope) })
             Separator()

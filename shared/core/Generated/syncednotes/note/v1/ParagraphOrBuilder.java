@@ -144,4 +144,27 @@ public interface ParagraphOrBuilder extends
    * @return The lineSpacing.
    */
   float getLineSpacing();
+
+  /**
+   * <pre>
+   * Only for a code block: the language its code is written in, which is what its syntax is
+   * coloured by. Every paragraph of one block carries the same. The colours themselves are
+   * never stored; they are the app's, for its light or dark look.
+   * </pre>
+   *
+   * <code>.syncednotes.note.v1.CodeLanguage language = 10;</code>
+   * @return The enum numeric value on the wire for language.
+   */
+  int getLanguageValue();
+  /**
+   * <pre>
+   * Only for a code block: the language its code is written in, which is what its syntax is
+   * coloured by. Every paragraph of one block carries the same. The colours themselves are
+   * never stored; they are the app's, for its light or dark look.
+   * </pre>
+   *
+   * <code>.syncednotes.note.v1.CodeLanguage language = 10;</code>
+   * @return The language.
+   */
+  syncednotes.note.v1.CodeLanguage getLanguage();
 }

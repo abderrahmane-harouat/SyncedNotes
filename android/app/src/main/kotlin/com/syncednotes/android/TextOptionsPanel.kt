@@ -11,6 +11,7 @@ import android.widget.TextView
 import com.syncednotes.engine.editor.Composer
 import com.syncednotes.engine.text.Alignment
 import com.syncednotes.engine.text.CharStyle
+import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.ListType
 import com.syncednotes.engine.text.Role
 
@@ -38,7 +39,8 @@ class TextOptionsPanel(context: Context, private val composer: Composer) :
         button(R.id.underline) to CharStyle.UNDERLINE, button(R.id.strikethrough) to CharStyle.STRIKETHROUGH,
         button(R.id.inline_code) to CharStyle.CODE,
     )
-    private val blocks = listOf(button(R.id.quote) to Role.QUOTE, button(R.id.code_block) to Role.CODE_BLOCK)
+    private val quote = button(R.id.quote)
+    private val codeBlock = button(R.id.code_block)
     private val indent = button(R.id.indent)
     private val outdent = button(R.id.outdent)
     private val divider = button(R.id.divider)
@@ -53,7 +55,21 @@ class TextOptionsPanel(context: Context, private val composer: Composer) :
         for ((view, type) in lists) view.setOnClickListener { composer.toggleList(type, now()) }
         for ((view, alignment) in alignments) view.setOnClickListener { composer.setAlignment(alignment, now()) }
         for ((view, style) in styles) view.setOnClickListener { composer.toggle(style, now()) }
-        for ((view, role) in blocks) view.setOnClickListener { composer.toggleRole(role, now()) }
+        quote.setOnClickListener { composer.toggleRole(Role.QUOTE, now()) }
+        // The Mac's Code Block menu: plain code, or code in a language its syntax is coloured
+        // by. Choosing the one the block is in already puts it back to body text.
+        codeBlock.setOnClickListener {
+            PopupMenu(context, codeBlock, Gravity.END).apply {
+                for (language in CodeLanguage.entries) {
+                    menu.add(language.title).apply {
+                        isCheckable = true
+                        isChecked = composer.formatState().codeLanguage == language
+                        setOnMenuItemClickListener { composer.toggleCodeBlock(language, now()); refresh(); true }
+                    }
+                }
+                show()
+            }
+        }
         indent.setOnClickListener { composer.indent(now()) }
         outdent.setOnClickListener { composer.outdent(now()) }
         divider.setOnClickListener { composer.insertDivider(now()) }
@@ -78,7 +94,8 @@ class TextOptionsPanel(context: Context, private val composer: Composer) :
         for ((view, type) in lists) view.isSelected = s.list == type
         for ((view, alignment) in alignments) view.isSelected = s.alignment == alignment
         for ((view, style) in styles) view.isSelected = s.has(style)
-        for ((view, role) in blocks) view.isSelected = s.role == role
+        quote.isSelected = s.role == Role.QUOTE
+        codeBlock.isSelected = s.role == Role.CODE_BLOCK
         setEnabled(indent, s.canIndent)
         setEnabled(outdent, s.canOutdent)
         spacingLabel.text = SPACINGS.firstOrNull { it.second == s.lineSpacing }?.first ?: ""

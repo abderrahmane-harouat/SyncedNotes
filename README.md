@@ -34,6 +34,10 @@ until the new one does everything it did. Not independently reviewed. What comes
   and strikethrough; text colours and highlights; alignment, indents and line spacing. Arabic
   and other right-to-left text runs in its own direction, joined as it should be, with emoji in
   colour.
+- **Code notes.** A code block can be in C or C++, and its syntax is coloured as an editor
+  colours it: keywords, types, strings, numbers, comments, preprocessor lines and calls, in
+  colours for the light look and the dark one. A comment or a raw string over many lines is
+  coloured on every one of them.
 - **The same tools on the Mac and the phone.** The phone's toolbar is Samsung Notes': checklist,
   a Text options card with every paragraph and character style, font colour, highlight, size,
   undo and redo, plus a picture button and reading mode. The Mac has the same in its toolbar,

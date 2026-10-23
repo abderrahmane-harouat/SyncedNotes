@@ -3,6 +3,7 @@ package com.syncednotes.engine.editor
 import com.syncednotes.engine.RecordingHost
 import com.syncednotes.engine.TestFonts
 import com.syncednotes.engine.text.CharStyle
+import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.ListKind
 import com.syncednotes.engine.text.ListLevel
 import com.syncednotes.engine.text.ListType
@@ -168,6 +169,72 @@ class BlocksTest {
         val narrow = c.caretInView()[0]
         c.caretTo(9)
         assertEquals(narrow, c.caretInView()[0], 0.5f)
+    }
+
+    @Test
+    fun choosingALanguageWithTheCaretInABlockGivesTheWholeBlockThatLanguage() {
+        val c = composer("intro\nint a;\nint b;\noutro")
+        c.setSelectionFromInput(6, 19, 0)
+        c.toggleRole(Role.CODE_BLOCK, 0)
+        c.caretTo(8)
+        c.toggleCodeBlock(CodeLanguage.CPP, 0)
+        assertEquals(listOf(CodeLanguage.NONE, CodeLanguage.CPP, CodeLanguage.CPP, CodeLanguage.NONE), (0..3).map { c.style(it).language })
+        assertEquals(Role.BODY, c.style(0).role)
+        assertEquals(CodeLanguage.CPP, c.formatState().codeLanguage)
+    }
+
+    @Test
+    fun choosingALanguageOnBodyTextMakesItACodeBlockInThatLanguage() {
+        val c = composer("int main(void);")
+        c.toggleCodeBlock(CodeLanguage.C, 0)
+        assertEquals(Role.CODE_BLOCK, c.style(0).role)
+        assertEquals(CodeLanguage.C, c.style(0).language)
+    }
+
+    @Test
+    fun choosingTheLanguageTheBlockIsAlreadyInPutsItBackToBodyText() {
+        val c = composer("int a;")
+        c.toggleCodeBlock(CodeLanguage.C, 0)
+        c.toggleCodeBlock(CodeLanguage.C, 0)
+        assertEquals(ParagraphStyle.DEFAULT, c.style(0))
+        assertEquals(null, c.formatState().codeLanguage)
+    }
+
+    @Test
+    fun returnInACodeBlockGoesOnInItsLanguage() {
+        val c = composer("int a;")
+        c.toggleCodeBlock(CodeLanguage.C, 0)
+        c.caretTo(6)
+        c.type("\n", 0)
+        assertEquals(Role.CODE_BLOCK, c.style(1).role)
+        assertEquals(CodeLanguage.C, c.style(1).language)
+    }
+
+    @Test
+    fun aLineMadeCodeUnderABlockJoinsItInItsLanguage() {
+        val c = composer("int a;\nint b;")
+        c.caretTo(0)
+        c.toggleCodeBlock(CodeLanguage.CPP, 0)
+        c.caretTo(8)
+        c.toggleRole(Role.CODE_BLOCK, 0)
+        assertEquals(CodeLanguage.CPP, c.style(1).language)
+    }
+
+    @Test
+    fun aCodeBlockMadeAnythingElseForgetsItsLanguage() {
+        val c = composer("int a;")
+        c.toggleCodeBlock(CodeLanguage.C, 0)
+        c.toggleRole(Role.QUOTE, 0)
+        assertEquals(CodeLanguage.NONE, c.style(0).language)
+    }
+
+    @Test
+    fun undoPutsBackTheLanguageABlockHadBefore() {
+        val c = composer("int a;")
+        c.toggleCodeBlock(CodeLanguage.C, 0)
+        c.toggleCodeBlock(CodeLanguage.CPP, 1000)
+        c.undo(2000)
+        assertEquals(CodeLanguage.C, c.style(0).language)
     }
 
     @Test

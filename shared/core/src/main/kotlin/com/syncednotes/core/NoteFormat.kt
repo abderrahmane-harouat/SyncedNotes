@@ -2,6 +2,7 @@ package com.syncednotes.core
 
 import com.syncednotes.engine.text.Alignment
 import com.syncednotes.engine.text.CharStyle
+import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.Direction
 import com.syncednotes.engine.text.ListKind
 import com.syncednotes.engine.text.ListLevel
@@ -12,6 +13,7 @@ import com.syncednotes.engine.text.ValueStyle
 import com.syncednotes.engine.text.relativeSize
 import com.syncednotes.engine.text.sizeValue
 import kotlin.math.roundToInt
+import syncednotes.note.v1.CodeLanguage as StoredCodeLanguage
 import syncednotes.note.v1.Color
 import syncednotes.note.v1.Divider
 import syncednotes.note.v1.Embedded
@@ -120,6 +122,16 @@ class NoteFormat {
             indent = stored.indent,
             lineSpacing = stored.lineSpacing,
             checked = stored.role == StoredRole.ROLE_CHECKLIST && stored.checked,
+            // A language this app does not know yet reads as plain code, and leaving it out is
+            // what makes [canEdit] refuse the note rather than save over it.
+            language = when (stored.role) {
+                StoredRole.ROLE_CODE_BLOCK -> when (stored.language) {
+                    StoredCodeLanguage.CODE_LANGUAGE_C -> CodeLanguage.C
+                    StoredCodeLanguage.CODE_LANGUAGE_CPP -> CodeLanguage.CPP
+                    else -> CodeLanguage.NONE
+                }
+                else -> CodeLanguage.NONE
+            },
         )
 
     private fun paragraph(document: TextDocument, p: Int): Paragraph {
@@ -142,6 +154,13 @@ class NoteFormat {
                 },
             )
             .setChecked(style.role == Role.CHECKLIST && style.checked)
+            .setLanguage(
+                when (if (style.role == Role.CODE_BLOCK) style.language else CodeLanguage.NONE) {
+                    CodeLanguage.NONE -> StoredCodeLanguage.CODE_LANGUAGE_NONE
+                    CodeLanguage.C -> StoredCodeLanguage.CODE_LANGUAGE_C
+                    CodeLanguage.CPP -> StoredCodeLanguage.CODE_LANGUAGE_CPP
+                },
+            )
             .setAlignment(
                 when (style.alignment) {
                     Alignment.NATURAL -> StoredAlignment.ALIGNMENT_NATURAL

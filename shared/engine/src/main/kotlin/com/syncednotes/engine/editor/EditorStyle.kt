@@ -1,5 +1,7 @@
 package com.syncednotes.engine.editor
 
+import com.syncednotes.engine.code.TokenKind
+
 /** Sizes in pixels and colours as 0xAARRGGBB. Defaults follow Samsung Notes' text editor. */
 data class EditorStyle(
     /** Samsung's text size unit in pixels: 1/360 of the page width. */
@@ -58,6 +60,8 @@ data class EditorStyle(
     val findEdge: Float = 1f,
     /** Pixels per point, for a picture's own size: a picture is shown at its size unless wider than the note. */
     val pictureScale: Float = 1f,
+    /** The colour of each [TokenKind] in a code block with a language, in the kinds' order. */
+    val codeColors: List<Int> = codeColors(dark = false),
 ) {
     /** The default text size in pixels. */
     val textSize: Float get() = defaultSize * sizeUnit
@@ -66,6 +70,32 @@ data class EditorStyle(
     val lineHeight: Float get() = textSize * lineSpacing
 
     companion object {
+        /**
+         * Code's colours on a light page and a dark one: those of the default themes of the
+         * editors people write C in, so code in a note reads as code they know. Each is
+         * readable on its page, and on a code block's panel, which is only a shade off it.
+         */
+        fun codeColors(dark: Boolean): List<Int> {
+            val byKind = if (dark) mapOf(
+                TokenKind.KEYWORD to 0xFFFC5FA3,
+                TokenKind.TYPE to 0xFF5DD8FF,
+                TokenKind.LITERAL to 0xFFD0BF69,
+                TokenKind.STRING to 0xFFFC6A5D,
+                TokenKind.COMMENT to 0xFF7F8C98,
+                TokenKind.PREPROCESSOR to 0xFFFD8F3F,
+                TokenKind.FUNCTION to 0xFF67B7A4,
+            ) else mapOf(
+                TokenKind.KEYWORD to 0xFF9B2393,
+                TokenKind.TYPE to 0xFF0B4F79,
+                TokenKind.LITERAL to 0xFF1C00CF,
+                TokenKind.STRING to 0xFFC41A16,
+                TokenKind.COMMENT to 0xFF5D6C79,
+                TokenKind.PREPROCESSOR to 0xFF643820,
+                TokenKind.FUNCTION to 0xFF326D74,
+            )
+            return TokenKind.entries.map { byKind.getValue(it).toInt() }
+        }
+
         /**
          * [density] is pixels per dp; [shortSidePx] the screen's shorter side. Samsung measures
          * text in 1/360 of the page width, which on a phone is the screen width in portrait;
@@ -121,6 +151,7 @@ data class EditorStyle(
                 findEdgeColor = if (dark) 0x99FFFFFF.toInt() else 0x66000000,
                 findEdge = 1f * density,
                 pictureScale = density,
+                codeColors = codeColors(dark),
             )
         }
 
@@ -177,6 +208,7 @@ data class EditorStyle(
             findEdgeColor = if (dark) 0x99FFFFFF.toInt() else 0x66000000,
             findEdge = 1f * scale,
             pictureScale = scale,
+            codeColors = codeColors(dark),
         )
     }
 }

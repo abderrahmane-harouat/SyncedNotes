@@ -5,6 +5,7 @@ import com.syncednotes.core.createVault
 import com.syncednotes.core.newId
 import java.io.File
 import java.time.Instant
+import syncednotes.note.v1.CodeLanguage
 import syncednotes.note.v1.Embedded
 import syncednotes.note.v1.Divider
 import syncednotes.note.v1.Highlight
@@ -61,6 +62,55 @@ fun main() {
                 p("An English line with عربي inside it, and (brackets)."),
             ),
         )
+        save(
+            note(
+                p("Reading a file in C", Role.ROLE_TITLE),
+                p("Counts the lines of a file, closing it on every way out."),
+                *code(
+                    CodeLanguage.CODE_LANGUAGE_C,
+                    "#include <stdio.h>",
+                    "",
+                    "/* Returns the number of lines,",
+                    "   or -1 when the file cannot be read. */",
+                    "long count_lines(const char *path) {",
+                    "    FILE *f = fopen(path, \"r\");",
+                    "    if (f == NULL) return -1;",
+                    "    long lines = 0;",
+                    "    for (int c; (c = fgetc(f)) != EOF;) if (c == '\\n') lines++;",
+                    "    fclose(f);",
+                    "    return lines; // 0x0 for an empty file",
+                    "}",
+                ),
+            ),
+            work,
+        )
+        save(
+            note(
+                p("A small C++ cache", Role.ROLE_TITLE),
+                *code(
+                    CodeLanguage.CODE_LANGUAGE_CPP,
+                    "#include <string>",
+                    "#include <unordered_map>",
+                    "",
+                    "template <typename V>",
+                    "class Cache {",
+                    "public:",
+                    "    explicit Cache(std::size_t limit) : limit_(limit) {}",
+                    "    bool put(const std::string& key, V value) {",
+                    "        if (items_.size() >= limit_) return false;",
+                    "        items_.emplace(key, std::move(value));",
+                    "        return true;",
+                    "    }",
+                    "private:",
+                    "    std::size_t limit_ = 1'000;",
+                    "    std::unordered_map<std::string, V> items_;",
+                    "};",
+                    "",
+                    "auto banner = R\"(Cache \"ready\")\";",
+                ),
+            ),
+            work,
+        )
         save(note(p("Weekend plan 🌿", Role.ROLE_TITLE), p("Things to get done before Monday 😀 👍🏽 🇩🇿 👨‍👩‍👧 ❤️, in no particular order."), check("Water the plants", true), check("Call the bakery"), check("Fix the bike's back light")))
         val old = newId()
         store.save(note(p("Old shopping list", Role.ROLE_TITLE), p("milk, bread")), old, now = t.minusSeconds(90_000))
@@ -73,4 +123,5 @@ private fun note(vararg paragraphs: Paragraph.Builder): Note = Note.newBuilder()
 private fun p(text: String, role: Role = Role.ROLE_BODY) = Paragraph.newBuilder().setText(text).setRole(role)
 private fun check(text: String, checked: Boolean = false) = p(text, Role.ROLE_CHECKLIST).setChecked(checked)
 private fun list(text: String, kind: ListKind, id: Int) = p(text).addLists(ListLevel.newBuilder().setKind(kind).setList(id))
+private fun code(language: CodeLanguage, vararg lines: String) = lines.map { p(it, Role.ROLE_CODE_BLOCK).setLanguage(language) }.toTypedArray()
 private fun run(start: Int, length: Int) = Run.newBuilder().setStart(start).setLength(length)

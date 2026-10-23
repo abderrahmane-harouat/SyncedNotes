@@ -605,6 +605,79 @@ public  final class Paragraph extends
     lineSpacing_ = 0F;
   }
 
+  public static final int LANGUAGE_FIELD_NUMBER = 10;
+  private int language_;
+  /**
+   * <pre>
+   * Only for a code block: the language its code is written in, which is what its syntax is
+   * coloured by. Every paragraph of one block carries the same. The colours themselves are
+   * never stored; they are the app's, for its light or dark look.
+   * </pre>
+   *
+   * <code>.syncednotes.note.v1.CodeLanguage language = 10;</code>
+   * @return The enum numeric value on the wire for language.
+   */
+  @java.lang.Override
+  public int getLanguageValue() {
+    return language_;
+  }
+  /**
+   * <pre>
+   * Only for a code block: the language its code is written in, which is what its syntax is
+   * coloured by. Every paragraph of one block carries the same. The colours themselves are
+   * never stored; they are the app's, for its light or dark look.
+   * </pre>
+   *
+   * <code>.syncednotes.note.v1.CodeLanguage language = 10;</code>
+   * @return The language.
+   */
+  @java.lang.Override
+  public syncednotes.note.v1.CodeLanguage getLanguage() {
+    syncednotes.note.v1.CodeLanguage result = syncednotes.note.v1.CodeLanguage.forNumber(language_);
+    return result == null ? syncednotes.note.v1.CodeLanguage.UNRECOGNIZED : result;
+  }
+  /**
+   * <pre>
+   * Only for a code block: the language its code is written in, which is what its syntax is
+   * coloured by. Every paragraph of one block carries the same. The colours themselves are
+   * never stored; they are the app's, for its light or dark look.
+   * </pre>
+   *
+   * <code>.syncednotes.note.v1.CodeLanguage language = 10;</code>
+   * @param value The enum numeric value on the wire for language to set.
+   */
+  private void setLanguageValue(int value) {
+      language_ = value;
+  }
+  /**
+   * <pre>
+   * Only for a code block: the language its code is written in, which is what its syntax is
+   * coloured by. Every paragraph of one block carries the same. The colours themselves are
+   * never stored; they are the app's, for its light or dark look.
+   * </pre>
+   *
+   * <code>.syncednotes.note.v1.CodeLanguage language = 10;</code>
+   * @param value The language to set.
+   * @throws IllegalArgumentException if UNRECOGNIZED is provided.
+   */
+  private void setLanguage(syncednotes.note.v1.CodeLanguage value) {
+    language_ = value.getNumber();
+
+  }
+  /**
+   * <pre>
+   * Only for a code block: the language its code is written in, which is what its syntax is
+   * coloured by. Every paragraph of one block carries the same. The colours themselves are
+   * never stored; they are the app's, for its light or dark look.
+   * </pre>
+   *
+   * <code>.syncednotes.note.v1.CodeLanguage language = 10;</code>
+   */
+  private void clearLanguage() {
+
+    language_ = 0;
+  }
+
   public static syncednotes.note.v1.Paragraph parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1332,6 +1405,83 @@ public  final class Paragraph extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Only for a code block: the language its code is written in, which is what its syntax is
+     * coloured by. Every paragraph of one block carries the same. The colours themselves are
+     * never stored; they are the app's, for its light or dark look.
+     * </pre>
+     *
+     * <code>.syncednotes.note.v1.CodeLanguage language = 10;</code>
+     * @return The enum numeric value on the wire for language.
+     */
+    @java.lang.Override
+    public int getLanguageValue() {
+      return instance.getLanguageValue();
+    }
+    /**
+     * <pre>
+     * Only for a code block: the language its code is written in, which is what its syntax is
+     * coloured by. Every paragraph of one block carries the same. The colours themselves are
+     * never stored; they are the app's, for its light or dark look.
+     * </pre>
+     *
+     * <code>.syncednotes.note.v1.CodeLanguage language = 10;</code>
+     * @param value The language to set.
+     * @throws IllegalArgumentException if UNRECOGNIZED is provided.
+     * @return This builder for chaining.
+     */
+    public Builder setLanguageValue(int value) {
+      copyOnWrite();
+      instance.setLanguageValue(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Only for a code block: the language its code is written in, which is what its syntax is
+     * coloured by. Every paragraph of one block carries the same. The colours themselves are
+     * never stored; they are the app's, for its light or dark look.
+     * </pre>
+     *
+     * <code>.syncednotes.note.v1.CodeLanguage language = 10;</code>
+     * @return The language.
+     */
+    @java.lang.Override
+    public syncednotes.note.v1.CodeLanguage getLanguage() {
+      return instance.getLanguage();
+    }
+    /**
+     * <pre>
+     * Only for a code block: the language its code is written in, which is what its syntax is
+     * coloured by. Every paragraph of one block carries the same. The colours themselves are
+     * never stored; they are the app's, for its light or dark look.
+     * </pre>
+     *
+     * <code>.syncednotes.note.v1.CodeLanguage language = 10;</code>
+     * @param value The enum numeric value on the wire for language to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLanguage(syncednotes.note.v1.CodeLanguage value) {
+      copyOnWrite();
+      instance.setLanguage(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Only for a code block: the language its code is written in, which is what its syntax is
+     * coloured by. Every paragraph of one block carries the same. The colours themselves are
+     * never stored; they are the app's, for its light or dark look.
+     * </pre>
+     *
+     * <code>.syncednotes.note.v1.CodeLanguage language = 10;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearLanguage() {
+      copyOnWrite();
+      instance.clearLanguage();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:syncednotes.note.v1.Paragraph)
   }
   @java.lang.Override
@@ -1359,10 +1509,11 @@ public  final class Paragraph extends
             "direction_",
             "indent_",
             "lineSpacing_",
+            "language_",
           };
           java.lang.String info =
-              "\u0000\t\u0000\u0000\u0001\t\t\u0000\u0002\u0000\u0001\u0208\u0002\u001b\u0003\f" +
-              "\u0004\u0007\u0005\u001b\u0006\f\u0007\f\b\u000b\t\u0001";
+              "\u0000\n\u0000\u0000\u0001\n\n\u0000\u0002\u0000\u0001\u0208\u0002\u001b\u0003\f" +
+              "\u0004\u0007\u0005\u001b\u0006\f\u0007\f\b\u000b\t\u0001\n\f";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

@@ -1,5 +1,8 @@
 package com.syncednotes.engine.layout
 
+import com.syncednotes.engine.code.LineState
+import com.syncednotes.engine.code.Syntax
+import com.syncednotes.engine.code.Token
 import com.syncednotes.engine.render.FontFamily
 import com.syncednotes.engine.render.FontStack
 import com.syncednotes.engine.render.ShapedRun
@@ -49,6 +52,14 @@ class DocumentLayout(
     private val ascentPerPx: Float
     private val descentPerPx: Float
     private var paragraphs = ArrayList<ParagraphLayout?>()
+    /**
+     * What each paragraph leaves open for the one below as code (see [LineState]); START for
+     * one that is not code. Kept current as the text and formatting change, apart from the
+     * layouts, which are made only when asked for: lexing a line is cheap, shaping it is not.
+     * Only a line whose start changed is laid out again, so typing in a long code block lays
+     * out one line, not the rest of the block, until a comment is opened or closed.
+     */
+    private val exits = ArrayList<LineState>()
     private var tops = FloatArray(1)
     private var topsValid = false
     var width = 0f
@@ -58,10 +69,15 @@ class DocumentLayout(
         val m = fonts.regular.primary.metrics(1f)
         ascentPerPx = m.ascent
         descentPerPx = m.descent
-        repeat(document.paragraphCount) { paragraphs += null }
+        repeat(document.paragraphCount) {
+            paragraphs += null
+            exits += LineState.START
+        }
+        relex(0, exits.size - 1)
         document.addListener(::onChange)
         document.addFormatListener { first, last ->
             for (i in first..minOf(last, paragraphs.size - 1)) paragraphs[i] = null
+            relex(first, minOf(last, exits.size - 1))
             topsValid = false
         }
     }
@@ -85,6 +101,12 @@ class DocumentLayout(
     private fun onChange(change: TextChange) {
         repeat(change.paragraphsBefore) { paragraphs.removeAt(change.firstParagraph) }
         repeat(change.paragraphsAfter) { paragraphs.add(change.firstParagraph, null) }
+        // The new lines start out with what the replaced ones left open for the line below,
+        // which is what that line was coloured from.
+        val leftOpen = exits[change.firstParagraph + change.paragraphsBefore - 1]
+        repeat(change.paragraphsBefore) { exits.removeAt(change.firstParagraph) }
+        repeat(change.paragraphsAfter) { exits.add(change.firstParagraph, leftOpen) }
+        relex(change.firstParagraph, change.firstParagraph + change.paragraphsAfter - 1)
         topsValid = false
     }
 
@@ -107,7 +129,8 @@ class DocumentLayout(
         val end = document.paragraphEnd(index)
         val text = document.substring(start, end)
         val style = document.paragraphStyle(index)
-        val runs = styleRuns(start, text.length, style.role)
+        val tokens = highlight(index, text, style)
+        val runs = styleRuns(start, text.length, style.role, tokens)
         val baseLevel = Bidi.paragraphLevel(text, style.direction)
         val levels = Bidi.levels(text, baseLevel)
 
@@ -161,11 +184,41 @@ class DocumentLayout(
         return layout
     }
 
+    /** The paragraph's code coloured by its language; null for one that is not code with a language. */
+    private fun highlight(index: Int, text: String, style: ParagraphStyle): List<Token>? =
+        syntaxOf(style)?.highlight(text, entryState(index))?.tokens
+
+    private fun syntaxOf(style: ParagraphStyle): Syntax? = if (style.role == Role.CODE_BLOCK) Syntax.of(style.language) else null
+
+    /** What the code above leaves open at the start of paragraph [index]. */
+    private fun entryState(index: Int): LineState =
+        if (index == 0 || document.paragraphStyle(index - 1).role != Role.CODE_BLOCK) LineState.START else exits[index - 1]
+
     /**
-     * Cuts the paragraph wherever any character style or value starts or stops. A title or
-     * heading is bold throughout and a code block monospaced throughout, because of what it is.
+     * Works out again what paragraphs [first]..[last] leave open, and goes on down for as
+     * long as that changes what the next one begins inside, throwing away the layout of each
+     * line whose colours change with it.
      */
-    private fun styleRuns(start: Int, length: Int, role: Role): StyleRuns {
+    private fun relex(first: Int, last: Int) {
+        var p = first
+        while (p < exits.size) {
+            val style = document.paragraphStyle(p)
+            val exit = syntaxOf(style)?.highlight(document.substring(document.paragraphStart(p), document.paragraphEnd(p)), entryState(p))?.exit
+                ?: LineState.START
+            val changed = exit != exits[p]
+            exits[p] = exit
+            if (p >= last && !changed) return
+            if (changed && p + 1 < paragraphs.size) paragraphs[p + 1] = null
+            p++
+        }
+    }
+
+    /**
+     * Cuts the paragraph wherever any character style or value starts or stops, and in code,
+     * wherever its syntax does. A title or heading is bold throughout and a code block
+     * monospaced throughout, because of what it is.
+     */
+    private fun styleRuns(start: Int, length: Int, role: Role, tokens: List<Token>?): StyleRuns {
         val roleFlags = when (role) {
             Role.TITLE, Role.HEADING, Role.SUBHEADING -> 1 shl CharStyle.BOLD.ordinal
             Role.CODE_BLOCK -> 1 shl CharStyle.CODE.ordinal
@@ -189,8 +242,14 @@ class DocumentLayout(
             val ranges = document.valueRanges(style)
             for (i in 0 until ranges.count) cut(ranges.start(i), ranges.end(i))
         }
+        if (tokens != null) for (t in tokens) {
+            if (t.start > 0) cuts += t.start
+            if (t.end < length) cuts += t.end
+        }
         val starts = cuts.toIntArray()
         val n = starts.size
+        val syntax = if (tokens != null) IntArray(n) else null
+        var t = 0
         val flags = IntArray(n)
         val sizes = FloatArray(n)
         val colors = IntArray(n)
@@ -207,8 +266,12 @@ class DocumentLayout(
             sizes[r] = base * relativeSize(value(ValueStyle.SIZE))
             colors[r] = value(ValueStyle.COLOR) ?: 0
             highlights[r] = value(ValueStyle.HIGHLIGHT) ?: 0
+            if (syntax != null) {
+                while (t < tokens!!.size && tokens[t].end <= starts[r]) t++
+                if (t < tokens.size && tokens[t].start <= starts[r]) syntax[r] = tokens[t].kind.ordinal + 1
+            }
         }
-        return StyleRuns(starts, flags, sizes, colors, highlights, length)
+        return StyleRuns(starts, flags, sizes, colors, highlights, length, syntax)
     }
 
     /**

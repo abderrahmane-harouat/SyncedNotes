@@ -92,6 +92,9 @@ Trash and pictures. Tried between this Mac's try-out notes and a Galaxy M32.
   character styles, inline code, quote, code block, divider, line spacing, indent, the Mac's
   text colours and six highlights; Samsung's reading mode on the phone; undo and redo on the
   Mac's toolbar.
+- [x] Code blocks in a language, their syntax coloured: C and C++ (Format ▸ Code Block on the
+  Mac, the code block button on the phone).
+- [ ] More languages for code blocks, and the block's language shown on the block itself.
 - [ ] Sync in the background on the phone, while the app is closed: today it syncs while open
   and unlocked, as SyncedPass does.
 - [ ] Deletion marks kept forever: prune those both devices have seen.

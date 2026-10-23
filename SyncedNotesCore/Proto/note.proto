@@ -45,6 +45,17 @@ message Paragraph {
   uint32 indent = 8;
   // Line spacing as a multiple of normal; 0 means normal (1).
   float line_spacing = 9;
+  // Only for a code block: the language its code is written in, which is what its syntax is
+  // coloured by. Every paragraph of one block carries the same. The colours themselves are
+  // never stored; they are the app's, for its light or dark look.
+  CodeLanguage language = 10;
+}
+
+enum CodeLanguage {
+  // Code with no language: shown monospaced, in the text colour.
+  CODE_LANGUAGE_NONE = 0;
+  CODE_LANGUAGE_C = 1;
+  CODE_LANGUAGE_CPP = 2;
 }
 
 enum Role {

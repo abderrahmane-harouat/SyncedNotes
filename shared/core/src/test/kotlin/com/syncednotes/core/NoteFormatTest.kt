@@ -2,6 +2,7 @@ package com.syncednotes.core
 
 import com.google.protobuf.ByteString
 import com.syncednotes.engine.text.CharStyle
+import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.ListKind
 import com.syncednotes.engine.text.Role
 import com.syncednotes.engine.text.TextDocument
@@ -11,6 +12,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import syncednotes.note.v1.Alignment
+import syncednotes.note.v1.CodeLanguage as StoredCodeLanguage
 import syncednotes.note.v1.Color
 import syncednotes.note.v1.Direction
 import syncednotes.note.v1.Divider
@@ -133,6 +135,33 @@ class NoteFormatTest {
         val saved = NoteFormat().encode(document)
         assertEquals(0, saved.getParagraphs(0).runsCount)
         assertEquals(listOf(run(5, 4).setBold(true).setHighlight(Highlight.HIGHLIGHT_GREEN).build()), saved.getParagraphs(1).runsList)
+    }
+
+    @Test
+    fun aCodeBlocksLanguageIsSavedWithItAndComesBackTheSame() {
+        val stored = note(
+            paragraph("#include <stdio.h>", StoredRole.ROLE_CODE_BLOCK).setLanguage(StoredCodeLanguage.CODE_LANGUAGE_C),
+            paragraph("std::vector<int> v;", StoredRole.ROLE_CODE_BLOCK).setLanguage(StoredCodeLanguage.CODE_LANGUAGE_CPP),
+            paragraph("plain code", StoredRole.ROLE_CODE_BLOCK),
+        )
+        assertTrue(NoteFormat.canEdit(stored))
+        val document = decoded(stored)
+        assertEquals(listOf(CodeLanguage.C, CodeLanguage.CPP, CodeLanguage.NONE), (0..2).map { document.paragraphStyle(it).language })
+        assertEquals(stored, NoteFormat().encode(document))
+    }
+
+    @Test
+    fun aCodeLanguageThisAppDoesNotKnowYetOpensTheNoteReadOnly() {
+        val fromANewerApp = note(paragraph("fn main() {}", StoredRole.ROLE_CODE_BLOCK).setLanguageValue(99))
+        assertFalse(NoteFormat.canEdit(fromANewerApp))
+    }
+
+    @Test
+    fun aParagraphThatIsNoLongerCodeIsSavedWithoutALanguage() {
+        val document = TextDocument()
+        document.replace(0, 0, "int x;")
+        document.setParagraphStyle(0, document.paragraphStyle(0).copy(language = CodeLanguage.C))
+        assertEquals(StoredCodeLanguage.CODE_LANGUAGE_NONE, NoteFormat().encode(document).getParagraphs(0).language)
     }
 
     @Test

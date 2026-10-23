@@ -98,6 +98,13 @@ fn is_arabic(cp: u32) -> bool {
 /// of the text around them when it has them, so an Arabic phrase keeps Arabic spacing.
 fn is_common(cp: u32) -> bool {
     matches!(cp, 0x20..=0x40 | 0x5B..=0x60 | 0x7B..=0x7E | 0xA0..=0xBF | 0x2000..=0x206F | 0x060C | 0x061B | 0x061F | 0x066A..=0x066D)
+        || is_emoji_joiner(cp)
+}
+
+/// What strings emoji together: the zero-width joiner, the variation selectors, the keycap,
+/// skin tones and the tags of subdivision flags. They stay in the font of the emoji they follow.
+fn is_emoji_joiner(cp: u32) -> bool {
+    matches!(cp, 0x200D | 0xFE0E | 0xFE0F | 0x20E3 | 0x1F3FB..=0x1F3FF | 0xE0020..=0xE007F)
 }
 
 /// Which of the four shapes each letter takes, by the rules of Unicode's chapter 9: a letter
@@ -170,8 +177,16 @@ pub fn shape(fonts: &[&Font], text: &[u16], size: f32, rtl: bool, out: &mut Vec<
     // character of no script stays in the font of the one before when that font has it.
     let mut font_of = vec![0usize; cps.len()];
     for (i, &cp) in cps.iter().enumerate() {
-        let first = fonts.iter().position(|f| f.glyph_index(cp) != 0).unwrap_or(0);
-        font_of[i] = if is_common(cp) && i > 0 && fonts[font_of[i - 1]].glyph_index(cp) != 0 { font_of[i - 1] } else { first };
+        // Followed by the emoji selector (U+FE0F), a character that has a text form too (♥,
+        // a digit before a keycap) is drawn as an emoji when a colour font has it.
+        let wants_emoji = cps.get(i + 1) == Some(&0xFE0F);
+        let emoji = if wants_emoji { fonts.iter().position(|f| f.has_color_bitmaps() && f.glyph_index(cp) != 0) } else { None };
+        let first = emoji.or_else(|| fonts.iter().position(|f| f.glyph_index(cp) != 0)).unwrap_or(0);
+        // A space or comma after an emoji goes back to a text font: the emoji font's space is
+        // as wide as an emoji. Only what strings emoji together stays with them.
+        let stays = i > 0 && is_common(cp) && fonts[font_of[i - 1]].glyph_index(cp) != 0
+            && (!fonts[font_of[i - 1]].has_color_bitmaps() || is_emoji_joiner(cp));
+        font_of[i] = if emoji.is_none() && stays { font_of[i - 1] } else { first };
     }
 
     let mut start = 0;
@@ -191,7 +206,7 @@ fn shape_stretch(
     font: &Font, font_index: usize, chars: &[(u32, usize)], forms: &[u32], size: f32, tab_advance: f32, rtl: bool,
     out: &mut Vec<ShapedGlyph>,
 ) {
-    use crate::otl::{Gdef, Glyph, Layout, GLOBAL};
+    use crate::otl::{Gdef, Glyph, Layout, GLOBAL, IGNORABLE};
     let (gdef_bytes, gsub, gpos) = font.layout_tables();
     let gdef = Gdef::new(gdef_bytes);
     let arabic = chars.iter().any(|&(c, _)| is_arabic(c));
@@ -200,12 +215,18 @@ fn shape_stretch(
     let mut buf: Vec<Glyph> = Vec::with_capacity(chars.len());
     let mut tabs: Vec<u32> = Vec::new();
     for (k, &(cp, cluster)) in chars.iter().enumerate() {
+        let mut mask = GLOBAL | forms[k];
         if is_default_ignorable(cp) {
-            continue;
+            // Kept for the substitutions only when the font knows it: a joiner between two
+            // emoji is how the font recognises a family, a flag, a skin tone.
+            if font.glyph_index(cp) == 0 {
+                continue;
+            }
+            mask |= IGNORABLE;
         }
         let id = if cp == '\t' as u32 { tabs.push(cluster as u32); font.glyph_index(' ' as u32) } else { font.glyph_index(cp) };
         let class = gdef.as_ref().map(|g| g.glyph_class(id)).unwrap_or(0);
-        buf.push(Glyph { id, cluster: cluster as u32, mask: GLOBAL | forms[k], class, attach: -1, ..Default::default() });
+        buf.push(Glyph { id, cluster: cluster as u32, mask, class, attach: -1, ..Default::default() });
     }
     let limit = crate::otl::growth_limit(chars.len());
 
@@ -217,6 +238,8 @@ fn shape_stretch(
             }
         }
     }
+    // Joiners and selectors the substitutions did not take into an emoji draw nothing.
+    buf.retain(|g| g.mask & IGNORABLE == 0);
     for g in buf.iter_mut() {
         g.advance = font.advance(g.id) as i32;
         // Marks take no room of their own: they sit on the letter before, wherever GPOS puts them.
@@ -384,5 +407,56 @@ mod tests {
         let pair = glyphs(&[&f], "AV", false);
         let alone = glyphs(&[&f], "A", false);
         assert!(pair[0].advance < alone[0].advance, "A is pulled toward V: {} < {}", pair[0].advance, alone[0].advance);
+    }
+
+    fn emoji() -> Font {
+        let path = concat!(env!("CARGO_MANIFEST_DIR"), "/../app/src/main/assets/fonts/NotoColorEmoji.ttf");
+        Font::parse(std::fs::read(path).unwrap()).unwrap()
+    }
+
+    #[test]
+    fn an_emoji_is_drawn_from_the_emoji_font() {
+        let (latin, colour) = (roboto(), emoji());
+        let out = glyphs(&[&latin, &colour], "a\u{1F600}", false);
+        assert_eq!(out.len(), 2);
+        assert_eq!(out[1].font, 1);
+        assert!(out[1].advance > 0.0);
+    }
+
+    #[test]
+    fn a_skin_tone_a_flag_and_a_family_each_become_one_picture() {
+        let (latin, colour) = (roboto(), emoji());
+        for sequence in ["\u{1F44D}\u{1F3FD}", "\u{1F1E9}\u{1F1FF}", "\u{1F468}\u{200D}\u{1F469}\u{200D}\u{1F467}"] {
+            let out = glyphs(&[&latin, &colour], sequence, false);
+            assert_eq!(out.len(), 1, "{sequence:?} gave {out:?}");
+            assert_eq!(out[0].font, 1);
+            assert_eq!(out[0].cluster, 0);
+        }
+    }
+
+    #[test]
+    fn a_heart_with_the_emoji_selector_is_the_red_emoji_not_the_text_heart() {
+        let (latin, colour) = (roboto(), emoji());
+        let out = glyphs(&[&latin, &colour], "\u{2764}\u{FE0F}", false);
+        assert_eq!(out.len(), 1, "{out:?}");
+        assert_eq!(out[0].font, 1);
+    }
+
+    #[test]
+    fn an_emoji_picture_decodes_to_colour() {
+        let colour = emoji();
+        let glyph = colour.glyph_index(0x1F600);
+        let bitmap = colour.color_bitmap(glyph, 32.0).unwrap();
+        let image = crate::png::decode(bitmap.png).unwrap();
+        assert!(image.width > 64 && image.height > 64);
+        // A yellow face: somewhere a pixel is clearly more red than blue.
+        assert!(image.rgba.chunks(4).any(|p| p[3] == 255 && p[0] > 200 && p[2] < 100));
+    }
+
+    #[test]
+    fn a_space_after_an_emoji_is_a_text_space_not_an_emoji_wide_one() {
+        let (latin, colour) = (roboto(), emoji());
+        let out = glyphs(&[&latin, &colour], "\u{1F600} a", false);
+        assert_eq!(out[1].font, 0, "{out:?}");
     }
 }

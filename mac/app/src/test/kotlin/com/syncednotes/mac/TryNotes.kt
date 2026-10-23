@@ -34,7 +34,6 @@ fun main() {
             t = t.plusSeconds(3_600)
             store.save(note, newId(), now = t, folder = folder)
         }
-        save(note(p("Weekend plan", Role.ROLE_TITLE), p("Things to get done before Monday, in no particular order."), check("Water the plants", true), check("Call the bakery"), check("Fix the bike's back light")))
         save(note(p("Lemon cake", Role.ROLE_TITLE), p("Ingredients", Role.ROLE_HEADING), list("200 g flour", ListKind.LIST_KIND_BULLETED, 1), list("3 eggs", ListKind.LIST_KIND_BULLETED, 1), list("2 lemons, zest and juice", ListKind.LIST_KIND_BULLETED, 1), p("Method", Role.ROLE_HEADING), list("Beat the eggs and sugar.", ListKind.LIST_KIND_NUMBERED, 2), list("Fold in the flour.", ListKind.LIST_KIND_NUMBERED, 2), list("Bake 35 minutes at 180 °C.", ListKind.LIST_KIND_NUMBERED, 2)), recipes)
         save(note(p("Books to read", Role.ROLE_TITLE), p("A few that came up this month."), list("The Pragmatic Programmer", ListKind.LIST_KIND_BULLETED, 4), list("A Philosophy of Software Design", ListKind.LIST_KIND_BULLETED, 4)))
         save(
@@ -61,6 +60,7 @@ fun main() {
                 p("An English line with عربي inside it, and (brackets)."),
             ),
         )
+        save(note(p("Weekend plan 🌿", Role.ROLE_TITLE), p("Things to get done before Monday 😀 👍🏽 🇩🇿 👨‍👩‍👧 ❤️, in no particular order."), check("Water the plants", true), check("Call the bakery"), check("Fix the bike's back light")))
         val old = newId()
         store.save(note(p("Old shopping list", Role.ROLE_TITLE), p("milk, bread")), old, now = t.minusSeconds(90_000))
         store.moveToTrash(old)

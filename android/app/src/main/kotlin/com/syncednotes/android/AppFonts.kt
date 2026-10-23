@@ -17,13 +17,15 @@ object AppFonts {
         family ?: run {
             val arabic = load(context, "NotoNaskhArabic-Regular.ttf")
             val arabicBold = load(context, "NotoNaskhArabic-Bold.ttf")
+            // Last in every stack: only what no other font has (emoji) comes from it.
+            val emoji = load(context, "NotoColorEmoji.ttf")
             // Naskh has no italic; italic Arabic text uses the upright face.
             FontFamily(
-                regular = FontStack(listOf(load(context, "Roboto-Regular.ttf"), arabic)),
-                bold = FontStack(listOf(load(context, "Roboto-Bold.ttf"), arabicBold)),
-                italic = FontStack(listOf(load(context, "Roboto-Italic.ttf"), arabic)),
-                boldItalic = FontStack(listOf(load(context, "Roboto-BoldItalic.ttf"), arabicBold)),
-                monospace = FontStack(listOf(load(context, "RobotoMono-Regular.ttf"), arabic)),
+                regular = FontStack(listOf(load(context, "Roboto-Regular.ttf"), arabic, emoji)),
+                bold = FontStack(listOf(load(context, "Roboto-Bold.ttf"), arabicBold, emoji)),
+                italic = FontStack(listOf(load(context, "Roboto-Italic.ttf"), arabic, emoji)),
+                boldItalic = FontStack(listOf(load(context, "Roboto-BoldItalic.ttf"), arabicBold, emoji)),
+                monospace = FontStack(listOf(load(context, "RobotoMono-Regular.ttf"), arabic, emoji)),
             )
         }.also { family = it }
     }

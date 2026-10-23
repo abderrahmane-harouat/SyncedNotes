@@ -16,12 +16,14 @@ object TestFonts {
     val family: FontFamily by lazy {
         val arabic = load("NotoNaskhArabic-Regular.ttf")
         val arabicBold = load("NotoNaskhArabic-Bold.ttf")
+        // Last in every stack: only what no other font has (emoji) comes from it.
+        val emoji = load("NotoColorEmoji.ttf")
         FontFamily(
-            regular = FontStack(listOf(load("Roboto-Regular.ttf"), arabic)),
-            bold = FontStack(listOf(load("Roboto-Bold.ttf"), arabicBold)),
-            italic = FontStack(listOf(load("Roboto-Italic.ttf"), arabic)),
-            boldItalic = FontStack(listOf(load("Roboto-BoldItalic.ttf"), arabicBold)),
-            monospace = FontStack(listOf(load("RobotoMono-Regular.ttf"), arabic)),
+            regular = FontStack(listOf(load("Roboto-Regular.ttf"), arabic, emoji)),
+            bold = FontStack(listOf(load("Roboto-Bold.ttf"), arabicBold, emoji)),
+            italic = FontStack(listOf(load("Roboto-Italic.ttf"), arabic, emoji)),
+            boldItalic = FontStack(listOf(load("Roboto-BoldItalic.ttf"), arabicBold, emoji)),
+            monospace = FontStack(listOf(load("RobotoMono-Regular.ttf"), arabic, emoji)),
         )
     }
 }

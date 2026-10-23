@@ -141,6 +141,40 @@ impl<'a> Target<'a> {
         }
     }
 
+    /// Draws a premultiplied RGBA picture with its top-left at (left, top), faded by [alpha]:
+    /// a colour emoji keeps its own colours, but fades with the text it is in.
+    pub fn blend_image(&mut self, clip: Clip, left: i32, top: i32, image: &crate::png::Image, alpha: u8) {
+        let area = Clip {
+            left,
+            top,
+            right: left.saturating_add(image.width as i32),
+            bottom: top.saturating_add(image.height as i32),
+        };
+        let c = clip.intersect(&self.bounds()).intersect(&area);
+        if c.is_empty() || alpha == 0 {
+            return;
+        }
+        let fade = alpha as u32;
+        for py in c.top..c.bottom {
+            for px in c.left..c.right {
+                let s = ((py - top) as usize * image.width + (px - left) as usize) * 4;
+                let src = &image.rgba[s..s + 4];
+                let sa = (src[3] as u32 * fade + 127) / 255;
+                if sa == 0 {
+                    continue;
+                }
+                let i = py as usize * self.stride + px as usize * 4;
+                let dst = &mut self.pixels[i..i + 4];
+                let inv = 255 - sa;
+                for k in 0..3 {
+                    let sc = (src[k] as u32 * fade + 127) / 255;
+                    dst[k] = (sc + (dst[k] as u32 * inv + 127) / 255).min(255) as u8;
+                }
+                dst[3] = (sa + (dst[3] as u32 * inv + 127) / 255).min(255) as u8;
+            }
+        }
+    }
+
     pub fn fill_path(&mut self, clip: Clip, path: &Path, color: Color) {
         let Some((min_x, min_y, max_x, max_y)) = path.bounds() else { return };
         let area = Clip {

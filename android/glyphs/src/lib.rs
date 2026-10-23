@@ -7,6 +7,7 @@
 pub mod font;
 pub mod otl;
 pub mod paint;
+pub mod png;
 pub mod raster;
 pub mod shape;
 

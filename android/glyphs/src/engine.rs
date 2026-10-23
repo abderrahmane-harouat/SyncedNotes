@@ -42,6 +42,8 @@ struct GlyphMask {
     left: i32,
     top: i32,
     mask: Mask,
+    /// A colour emoji's picture, scaled to the size, in place of a coverage mask.
+    picture: Option<crate::png::Image>,
 }
 
 pub struct Engine {
@@ -236,8 +238,13 @@ impl Engine {
                 self.glyphs.clear();
             }
             let font = &self.fonts[font_id];
-            let g = self.glyphs.entry(key).or_insert_with(|| rasterize_glyph(font, glyph, size, subpixel / SUBPIXEL_STEPS));
-            target.blend_mask(clip, origin_x + g.left, origin_y + g.top, &g.mask, color);
+            let g = self.glyphs.entry(key).or_insert_with(|| {
+                if font.has_color_bitmaps() { picture_glyph(font, glyph, size) } else { rasterize_glyph(font, glyph, size, subpixel / SUBPIXEL_STEPS) }
+            });
+            match &g.picture {
+                Some(picture) => target.blend_image(clip, origin_x + g.left, origin_y + g.top, picture, color.a),
+                None => target.blend_mask(clip, origin_x + g.left, origin_y + g.top, &g.mask, color),
+            }
         }
         Some(())
     }
@@ -266,7 +273,7 @@ fn rasterize_glyph(font: &Font, glyph: u16, size: f32, subpixel: f32) -> GlyphMa
     let scale = size / font.units_per_em as f32;
     let t = Transform { a: scale, b: 0.0, c: 0.0, d: -scale, e: subpixel, f: 0.0 };
     let mut path = Path::new();
-    let empty = GlyphMask { left: 0, top: 0, mask: Mask { width: 0, height: 0, coverage: Vec::new() } };
+    let empty = GlyphMask { left: 0, top: 0, mask: Mask { width: 0, height: 0, coverage: Vec::new() }, picture: None };
     if font.outline(glyph, &t, &mut path).is_none() {
         return empty;
     }
@@ -275,7 +282,27 @@ fn rasterize_glyph(font: &Font, glyph: u16, size: f32, subpixel: f32) -> GlyphMa
         return empty;
     }
     let area = Clip { left: x0.floor() as i32, top: y0.floor() as i32, right: x1.ceil() as i32 + 1, bottom: y1.ceil() as i32 + 1 };
-    GlyphMask { left: area.left, top: area.top, mask: path.rasterize(area) }
+    GlyphMask { left: area.left, top: area.top, mask: path.rasterize(area), picture: None }
+}
+
+/// A colour emoji at `size` pixels per em: its picture decoded once and scaled from its strike,
+/// placed by the strike's bearings. Nothing at all when the picture cannot be read.
+fn picture_glyph(font: &Font, glyph: u16, size: f32) -> GlyphMask {
+    let empty = GlyphMask { left: 0, top: 0, mask: Mask { width: 0, height: 0, coverage: Vec::new() }, picture: None };
+    let Some(bitmap) = font.color_bitmap(glyph, size) else { return empty };
+    let Some(image) = crate::png::decode(bitmap.png) else { return empty };
+    let scale = size / bitmap.ppem.max(1) as f32;
+    let width = (image.width as f32 * scale).round().max(1.0) as usize;
+    let height = (image.height as f32 * scale).round().max(1.0) as usize;
+    if width as f32 > MAX_GLYPH_PIXELS || height as f32 > MAX_GLYPH_PIXELS {
+        return empty;
+    }
+    GlyphMask {
+        left: (bitmap.bearing_x as f32 * scale).round() as i32,
+        top: -(bitmap.bearing_y as f32 * scale).round() as i32,
+        mask: Mask { width: 0, height: 0, coverage: Vec::new() },
+        picture: Some(crate::png::resize(&image, width, height)),
+    }
 }
 
 #[cfg(test)]

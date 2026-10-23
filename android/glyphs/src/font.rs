@@ -56,6 +56,17 @@ struct Table {
     length: usize,
 }
 
+/// One glyph's colour picture, at its strike's size.
+pub struct ColorBitmap<'a> {
+    pub png: &'a [u8],
+    pub ppem: u8,
+    pub width: u8,
+    pub height: u8,
+    /// From the glyph's origin to the picture's left edge, and up from the baseline to its top.
+    pub bearing_x: i8,
+    pub bearing_y: i8,
+}
+
 pub struct Font {
     data: Vec<u8>,
     pub units_per_em: u16,
@@ -70,8 +81,12 @@ pub struct Font {
     num_glyphs: u16,
     long_loca: bool,
     num_h_metrics: u16,
-    loca: Table,
-    glyf: Table,
+    /// Absent in a font of colour bitmaps only, such as the emoji font.
+    loca: Option<Table>,
+    glyf: Option<Table>,
+    /// Colour bitmaps: where each glyph's picture is (CBLC) and the pictures (CBDT).
+    cblc: Option<Table>,
+    cbdt: Option<Table>,
     hmtx: Table,
     cmap: Option<Cmap>,
     /// OpenType layout: glyph classes, substitutions (Arabic joining, ligatures), positioning.
@@ -132,9 +147,12 @@ impl Font {
         let hhea = find(b"hhea")?;
         let maxp = find(b"maxp")?;
         let hmtx = find(b"hmtx")?;
-        // Only TrueType outlines for now; a CFF font has no glyf/loca and is refused outright.
-        let loca = find(b"loca")?;
-        let glyf = find(b"glyf")?;
+        // TrueType outlines, or colour bitmaps; a CFF font has neither and is refused outright.
+        let (loca, glyf) = (find(b"loca"), find(b"glyf"));
+        let (cblc, cbdt) = (find(b"CBLC"), find(b"CBDT"));
+        if (loca.is_none() || glyf.is_none()) && (cblc.is_none() || cbdt.is_none()) {
+            return None;
+        }
 
         let units_per_em = u16_at(d, head.offset + 18)?;
         if units_per_em == 0 {
@@ -175,6 +193,8 @@ impl Font {
             num_h_metrics,
             loca,
             glyf,
+            cblc,
+            cbdt,
             hmtx,
             cmap,
             gdef,
@@ -303,20 +323,129 @@ impl Font {
         if glyph >= self.num_glyphs {
             return None;
         }
+        let (loca, glyf) = (self.loca?, self.glyf?);
         let d = &self.data[..];
         let i = glyph as usize;
         let (start, end) = if self.long_loca {
-            (u32_at(d, self.loca.offset + 4 * i)? as usize, u32_at(d, self.loca.offset + 4 * i + 4)? as usize)
+            (u32_at(d, loca.offset + 4 * i)? as usize, u32_at(d, loca.offset + 4 * i + 4)? as usize)
         } else {
             (
-                u16_at(d, self.loca.offset + 2 * i)? as usize * 2,
-                u16_at(d, self.loca.offset + 2 * i + 2)? as usize * 2,
+                u16_at(d, loca.offset + 2 * i)? as usize * 2,
+                u16_at(d, loca.offset + 2 * i + 2)? as usize * 2,
             )
         };
-        if end < start || end > self.glyf.length {
+        if end < start || end > glyf.length {
             return None;
         }
-        Some((self.glyf.offset + start, end - start))
+        Some((glyf.offset + start, end - start))
+    }
+
+    /// Whether the font draws its glyphs as colour pictures (emoji) rather than outlines.
+    pub fn has_color_bitmaps(&self) -> bool {
+        self.cblc.is_some() && self.cbdt.is_some()
+    }
+
+    /// The colour picture for [glyph] from the strike nearest above [ppem] pixels per em (the
+    /// largest when none is): its PNG bytes and where it sits.
+    pub fn color_bitmap(&self, glyph: u16, ppem: f32) -> Option<ColorBitmap<'_>> {
+        let (cblc, cbdt) = (self.cblc?, self.cbdt?);
+        let d = &self.data[..];
+        let count = u32_at(d, cblc.offset + 4)? as usize;
+        // Pick the strike: the smallest at least as big as asked for, else the biggest.
+        let mut chosen: Option<(usize, u8)> = None;
+        for i in 0..count.min(64) {
+            let record = cblc.offset + 8 + 48 * i;
+            let (start, end) = (u16_at(d, record + 40)?, u16_at(d, record + 42)?);
+            if glyph < start || glyph > end {
+                continue;
+            }
+            let strike = u8_at(d, record + 45)?;
+            let better = match chosen {
+                None => true,
+                Some((_, best)) => {
+                    let (s, b) = (strike as f32, best as f32);
+                    (s >= ppem && (b < ppem || s < b)) || (b < ppem && s > b)
+                }
+            };
+            if better {
+                chosen = Some((record, strike));
+            }
+        }
+        let (record, strike) = chosen?;
+        let array = cblc.offset + u32_at(d, record)? as usize;
+        let subtables = u32_at(d, record + 8)? as usize;
+        for k in 0..subtables.min(4096) {
+            let entry = array + 8 * k;
+            let (first, last) = (u16_at(d, entry)?, u16_at(d, entry + 2)?);
+            if glyph < first || glyph > last {
+                continue;
+            }
+            let sub = array + u32_at(d, entry + 4)? as usize;
+            let (index_format, image_format) = (u16_at(d, sub)?, u16_at(d, sub + 2)?);
+            let image_base = cbdt.offset + u32_at(d, sub + 4)? as usize;
+            let n = (glyph - first) as usize;
+            // Where the glyph's data starts and ends within CBDT, and, for formats that keep
+            // them in the index, the big metrics every glyph of the subtable shares.
+            let (start, end, shared) = match index_format {
+                1 => (u32_at(d, sub + 8 + 4 * n)? as usize, u32_at(d, sub + 12 + 4 * n)? as usize, None),
+                3 => (u16_at(d, sub + 8 + 2 * n)? as usize, u16_at(d, sub + 10 + 2 * n)? as usize, None),
+                2 => {
+                    let size = u32_at(d, sub + 8)? as usize;
+                    (n * size, (n + 1) * size, Some(sub + 12))
+                }
+                4 => {
+                    let pairs = u32_at(d, sub + 8)? as usize;
+                    let mut found = None;
+                    for p in 0..pairs.min(65536) {
+                        if u16_at(d, sub + 12 + 4 * p)? == glyph {
+                            found = Some((u16_at(d, sub + 14 + 4 * p)? as usize, u16_at(d, sub + 18 + 4 * p)? as usize));
+                            break;
+                        }
+                    }
+                    let (a, b) = found?;
+                    (a, b, None)
+                }
+                5 => {
+                    let size = u32_at(d, sub + 8)? as usize;
+                    let glyphs = u32_at(d, sub + 20)? as usize;
+                    let position = (0..glyphs.min(65536)).position(|p| u16_at(d, sub + 24 + 2 * p) == Some(glyph))?;
+                    (position * size, (position + 1) * size, Some(sub + 12))
+                }
+                _ => return None,
+            };
+            if end < start {
+                return None;
+            }
+            let at = image_base.checked_add(start)?;
+            let length = end - start;
+            if at + length > cbdt.offset + cbdt.length {
+                return None;
+            }
+            // (height, width, bearing x, bearing y) in pixels of the strike; y up from the baseline.
+            let (metrics, png_at) = match image_format {
+                17 => ((u8_at(d, at)?, u8_at(d, at + 1)?, i8_at(d, at + 2)?, i8_at(d, at + 3)?), at + 5),
+                18 => ((u8_at(d, at)?, u8_at(d, at + 1)?, i8_at(d, at + 2)?, i8_at(d, at + 3)?), at + 8),
+                19 => {
+                    let m = shared?;
+                    ((u8_at(d, m)?, u8_at(d, m + 1)?, i8_at(d, m + 2)?, i8_at(d, m + 3)?), at)
+                }
+                _ => return None,
+            };
+            let png_length = u32_at(d, png_at)? as usize;
+            let png = bytes(d, png_at + 4, png_length)?;
+            if png_at + 4 + png_length > at + length {
+                return None;
+            }
+            return Some(ColorBitmap {
+                png,
+                ppem: strike,
+                height: metrics.0,
+                width: metrics.1,
+                bearing_x: metrics.2,
+                bearing_y: metrics.3,
+            });
+        }
+        None
     }
 
     /// Emits the outline of `glyph` in font units (y up) through `transform` into `sink`.

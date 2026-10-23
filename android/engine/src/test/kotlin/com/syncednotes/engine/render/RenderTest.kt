@@ -64,4 +64,17 @@ class RenderTest {
         assertTrue(highlighted > 1000, "the word's background is highlighted ($highlighted)")
         assertTrue(handlePixels > 300, "both handles are drawn ($handlePixels)")
     }
+
+    @Test
+    fun anEmojiIsDrawnInItsOwnColours() {
+        val c = newComposer(height = height)
+        c.commitText("\uD83D\uDE00", 1, 0)
+        val px = frame { c.render(it, 0) }
+        var yellow = 0
+        for (y in 0 until (c.style.paddingTop + c.style.lineHeight).toInt()) for (x in 0 until width / 4) {
+            val rgb = px.rgb(x, y)
+            if ((rgb shr 16) > 200 && (rgb and 0xFF) < 120) yellow++
+        }
+        assertTrue(yellow > 100, "a yellow face, not black text: $yellow yellow pixels")
+    }
 }

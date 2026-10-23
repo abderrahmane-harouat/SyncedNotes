@@ -15,6 +15,9 @@ pub const ISOL: u32 = 2;
 pub const FINA: u32 = 4;
 pub const MEDI: u32 = 8;
 pub const INIT: u32 = 16;
+/// Not a feature: marks a joiner or variation selector kept only so substitutions can see it
+/// (an emoji sequence); whatever is left of them afterwards draws nothing.
+pub const IGNORABLE: u32 = 1 << 31;
 
 pub type Tag = [u8; 4];
 

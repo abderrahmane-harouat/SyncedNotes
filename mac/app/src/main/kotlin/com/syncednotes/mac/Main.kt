@@ -77,14 +77,14 @@ fun main() {
         remember {
             Desktop.getDesktop().setQuitHandler { _, response ->
                 SwingUtilities.invokeLater {
-                    model.saveNow()
+                    model.quit()
                     response.performQuit()
                 }
             }
         }
         Window(
             onCloseRequest = {
-                model.saveNow()
+                model.quit()
                 exitApplication()
             },
             title = "SyncedNotes",
@@ -120,6 +120,11 @@ fun main() {
                 tryPassphrase()?.let { model.unlock(it) }
                 selfTestText()?.let { text ->
                     delay(1500)
+                    // "<folder>" starts naming a new folder instead, to look at its row.
+                    if (text == "<folder>") {
+                        model.newFolder()
+                        return@LaunchedEffect
+                    }
                     model.newNote()
                     delay(500)
                     // Into the note pane: right of the two columns, below the toolbar.

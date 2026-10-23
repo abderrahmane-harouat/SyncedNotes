@@ -16,7 +16,6 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
@@ -62,7 +61,7 @@ fun Sidebar(
     val c = colors
     Column(modifier.fillMaxHeight().background(c.sidebar)) {
         // Room for the window's buttons, which sit over the sidebar as in the Mac's own apps.
-        Spacer(Modifier.height(52.dp))
+        Spacer(Modifier.height(HEADER_HEIGHT))
         LazyColumn(Modifier.weight(1f).fillMaxWidth().padding(horizontal = 10.dp)) {
             item {
                 PlaceRow("All Notes", Icons.tray, model.noteCounts.values.sum(), model.place == Place.AllNotes) { model.show(Place.AllNotes) }
@@ -71,9 +70,21 @@ fun Sidebar(
                 PlaceRow("Notes", Icons.note, model.noteCounts[null] ?: 0, model.place == Place.NoFolder, help = "Notes in no folder") { model.show(Place.NoFolder) }
             }
             item { SectionTitle("Folders") }
-            items(visibleFolders(model), key = { it.id.hex }) { folder ->
-                FolderRow(model, folder, onDeleteFolder)
+            // A folder being named before it exists sits where it will go: after its parent's
+            // folders, or after all of them at the top level.
+            val folders = visibleFolders(model)
+            val pending = model.namingNewFolderIn
+            val parent = pending as? Id
+            val after = if (parent == null) folders.lastIndex else folders.indexOfLast { f ->
+                var p: Id? = f.id
+                while (p != null && p != parent) p = model.folders.firstOrNull { it.id == p }?.parent
+                p == parent
             }
+            folders.forEachIndexed { i, folder ->
+                item(key = folder.id.hex) { FolderRow(model, folder, onDeleteFolder) }
+                if (pending != null && i == after) item(key = "new folder") { NewFolderRow(model, parent) }
+            }
+            if (pending != null && after < 0) item(key = "new folder") { NewFolderRow(model, parent) }
             item { Spacer(Modifier.height(12.dp)) }
             item {
                 PlaceRow(
@@ -190,7 +201,7 @@ private fun FolderRow(model: NotesModel, folder: NoteStore.Folder, onDeleteFolde
             }
             Icon(Icons.folder, c.accent, size = 16.dp)
             if (model.renamingFolder == folder.id) {
-                RenameField(folder.name, onDone = { model.renameFolder(folder.id, it) }, onCancel = { model.renamingFolder = null }, modifier = Modifier.weight(1f))
+                NameField(folder.name, onDone = { model.renameFolder(folder.id, it) }, onCancel = { model.renamingFolder = null }, modifier = Modifier.weight(1f))
             } else {
                 BasicText(folder.name, Modifier.weight(1f), style = MacType.body.copy(color = c.text), maxLines = 1, overflow = TextOverflow.Ellipsis)
                 Count(model.noteCounts[folder.id] ?: 0)
@@ -211,13 +222,38 @@ private fun FolderRow(model: NotesModel, folder: NoteStore.Folder, onDeleteFolde
     }
 }
 
-/** A folder's name being typed: Return keeps it, Escape or an empty name leaves the old one. */
+/**
+ * A folder's name being typed: Return or a click elsewhere keeps it, Escape leaves it as it
+ * was. Every name call happens once, whichever way the field closes.
+ */
 @Composable
-private fun RenameField(name: String, onDone: (String) -> Unit, onCancel: () -> Unit, modifier: Modifier) {
-    var text by remember { mutableStateOf(name) }
+private fun NameField(initial: String, onDone: (String) -> Unit, onCancel: () -> Unit, modifier: Modifier) {
+    var text by remember { mutableStateOf(initial) }
+    var closed by remember { mutableStateOf(false) }
     val focus = remember { FocusRequester() }
-    PlainTextField(text, { text = it }, "Folder name", modifier, onSubmit = { onDone(text) }, onCancel = onCancel, focusRequester = focus)
+    fun close(keep: Boolean) {
+        if (closed) return
+        closed = true
+        if (keep) onDone(text) else onCancel()
+    }
+    PlainTextField(
+        text, { text = it }, "Folder name", modifier,
+        onSubmit = { close(true) }, onCancel = { close(false) }, onFocusLost = { close(true) }, focusRequester = focus,
+    )
     LaunchedEffect(Unit) { focus.requestFocus() }
+}
+
+/** The row of a folder being named before it exists: empty, ready to type its name into. */
+@Composable
+private fun NewFolderRow(model: NotesModel, parent: Id?) {
+    val c = colors
+    val depth = parent?.let { p -> model.folders.firstOrNull { it.id == p }?.let { model.depthOf(it) + 1 } } ?: 0
+    SidebarRow(false, {}) {
+        Spacer(Modifier.width((depth * 14).dp))
+        Spacer(Modifier.size(12.dp))
+        Icon(Icons.folder, c.accent, size = 16.dp)
+        NameField("", onDone = model::createFolder, onCancel = model::cancelNewFolder, modifier = Modifier.weight(1f))
+    }
 }
 
 /** A right click, or a Control-click, as the Mac takes both: [onClick] gets where it was. */

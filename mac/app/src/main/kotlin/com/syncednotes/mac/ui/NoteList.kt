@@ -2,6 +2,8 @@ package com.syncednotes.mac.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.hoverable
+import androidx.compose.foundation.interaction.collectIsHoveredAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -101,7 +103,7 @@ fun NoteList(
     }
 
     Column(modifier.fillMaxHeight().background(c.window)) {
-        Row(Modifier.fillMaxWidth().height(52.dp).padding(start = 16.dp, end = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(HEADER_HEIGHT).padding(start = 16.dp, end = 8.dp, top = TITLE_BAR), verticalAlignment = Alignment.CenterVertically) {
             BasicText(listTitle(model), Modifier.weight(1f), style = MacType.headline.copy(color = c.text), maxLines = 1, overflow = TextOverflow.Ellipsis)
             ToolbarButton(Icons.lock, "Lock Notes (⌃⌘L)", model::lock)
             // In plain sight beside Lock, not only in menus: from Settings and the File menu
@@ -191,9 +193,12 @@ private fun NoteRow(
 ) {
     val c = colors
     val lit = selected && listFocused
+    val hover = remember { androidx.compose.foundation.interaction.MutableInteractionSource() }
+    val hovered by hover.collectIsHoveredAsState()
     val background = when {
         lit -> c.selection
         selected -> c.selectionInactive
+        hovered -> c.control
         else -> Color.Transparent
     }
     val primary = if (lit) Color.White else c.text
@@ -205,6 +210,7 @@ private fun NoteRow(
 
     Box(
         Modifier
+            .hoverable(hover)
             .onRightClick { menuAt = it }
             .pointerInput(note.id) {
                 awaitPointerEventScope {

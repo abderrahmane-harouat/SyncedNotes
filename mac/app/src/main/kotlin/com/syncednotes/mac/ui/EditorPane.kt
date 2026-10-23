@@ -61,7 +61,7 @@ fun EditorPane(
         if (model.notesCreated > 0) editor.focus.requestFocus()
     }
     Column(modifier.fillMaxSize().background(c.window)) {
-        Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(HEADER_HEIGHT).padding(start = 12.dp, end = 12.dp, top = TITLE_BAR), verticalAlignment = Alignment.CenterVertically) {
             AppearanceButton(appearance, onAppearance)
             Spacer(Modifier.weight(1f))
             if (open != null && open.editable && !open.inTrash) FormatToolbar(editor)

@@ -154,6 +154,8 @@ fun PlainTextField(
     modifier: Modifier = Modifier,
     onSubmit: () -> Unit = {},
     onCancel: () -> Unit = {},
+    /** Called when the field had the keyboard and loses it: a click elsewhere. */
+    onFocusLost: () -> Unit = {},
     focusRequester: FocusRequester = remember { FocusRequester() },
     leading: (@Composable () -> Unit)? = null,
     style: TextStyle = MacType.body,
@@ -168,7 +170,10 @@ fun PlainTextField(
         cursorBrush = SolidColor(c.accent),
         modifier = modifier
             .focusRequester(focusRequester)
-            .onFocusChanged { focused = it.isFocused }
+            .onFocusChanged {
+                if (focused && !it.isFocused) onFocusLost()
+                focused = it.isFocused
+            }
             .onPreviewKeyEvent { submitOrCancel(it, onSubmit, onCancel) },
         decorationBox = { inner ->
             Row(

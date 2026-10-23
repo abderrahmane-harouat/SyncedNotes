@@ -125,8 +125,8 @@ class NotesModelTest {
     fun aNewNoteInAFolderGoesIntoThatFolder() {
         val model = unlocked()
         model.newFolder()
+        model.createFolder("Work")
         val folder = (model.place as NotesModel.Place.InFolder).id
-        model.renameFolder(folder, "Work")
         model.newNote()
         composer.type("Agenda", 0)
         model.saveNow()
@@ -163,5 +163,43 @@ class NotesModelTest {
         val dark = Composer(AppFonts.family, EditorStyle.macLike(2f, dark = true), Host).also { it.setViewport(1200, 800, 0f, 0f) }
         model.editorAppeared(dark)
         assertEquals("Written just before switching to dark", dark.document.toString())
+    }
+
+    @Test
+    fun aNewFolderLeftWithoutANameIsNeverMade() {
+        val model = unlocked()
+        model.newFolder()
+        model.createFolder("   ")
+        model.newFolder()
+        model.cancelNewFolder()
+        assertTrue(model.folders.isEmpty())
+        assertNull(model.namingNewFolderIn)
+    }
+
+    @Test
+    fun deletingAnEmptyNoteRemovesItForGoodRatherThanToTheTrash() {
+        val model = unlocked()
+        model.newNote()
+        composer.type("Kept", 0)
+        model.newNote()
+        val empty = model.document!!.id
+        model.moveToTrash(setOf(empty))
+        assertEquals(0, model.trashCount)
+        assertEquals(listOf("Kept"), model.summaries.map { it.title })
+        val kept = model.summaries.single().id
+        model.moveToTrash(setOf(kept))
+        assertEquals(1, model.trashCount)
+    }
+
+    @Test
+    fun anEmptyNoteLeftBehindByACrashIsGoneAtTheNextUnlock() {
+        val model = unlocked()
+        model.newNote()
+        composer.type("Kept", 0)
+        model.newNote()
+        // As if the app stopped here: the empty note was saved once, and never left.
+        val again = NotesModel(home, CoroutineScope(Dispatchers.Unconfined))
+        assertTrue(again.unlock(passphrase))
+        assertEquals(listOf("Kept"), again.summaries.map { it.title })
     }
 }

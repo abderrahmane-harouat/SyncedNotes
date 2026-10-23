@@ -94,8 +94,14 @@ class NotesModel(private val home: File, private val scope: CoroutineScope) {
         private set
     /** The folders shown open in the sidebar. */
     var expandedFolders: Set<Id> by mutableStateOf(emptySet())
-    /** The folder whose name is being typed in the sidebar: a new one, or one being renamed. */
+    /** The folder whose name is being typed in the sidebar, to rename it. */
     var renamingFolder: Id? by mutableStateOf(null)
+    /**
+     * A folder being named before it exists: its parent, or [TOP] for one at the top level.
+     * It is made only once it has a name; left empty, it was never there.
+     */
+    var namingNewFolderIn: Any? by mutableStateOf(null)
+        private set
     /** The note open in the editor. One selected note is simply the open note. */
     var document: OpenNote? by mutableStateOf(null)
         private set
@@ -175,10 +181,22 @@ class NotesModel(private val home: File, private val scope: CoroutineScope) {
         val opened = NoteStore(home, vault)
         // As in Apple Notes: a note stays in the Trash for 30 days, then goes for good.
         opened.emptyTrash(NoteStore.TRASH_KEEPS_FOR_SECONDS)
+        // A new note left empty is removed as it is left; one the app was stopped in before
+        // that could happen (a crash, a forced quit) is removed now.
+        for (summary in opened.summaries()) {
+            if (summary.title.isEmpty() && runCatching { opened.load(summary.id).isEmpty }.getOrDefault(false)) {
+                runCatching { opened.delete(summary.id) }
+            }
+        }
         store = opened
         phase = Phase.Unlocked
         refresh()
         summaries.firstOrNull()?.let { select(it.id) }
+    }
+
+    /** Quitting: the note on screen is saved, or removed if it was left empty. */
+    fun quit() {
+        leaveCurrentNote()
     }
 
     /** Saves, then forgets the keys and everything decrypted. */
@@ -282,15 +300,27 @@ class NotesModel(private val home: File, private val scope: CoroutineScope) {
         notesCreated++
     }
 
-    /** Moves notes to the Trash, from where they can be restored for 30 days. */
+    /**
+     * Moves notes to the Trash, from where they can be restored for 30 days. An empty note goes
+     * for good instead: there is nothing in it to want back.
+     */
     fun moveToTrash(ids: Set<Id>) {
         val store = store ?: return
-        document?.id?.takeIf { it in ids }?.let {
+        // The open note is judged by what the editor holds, which may not be saved yet.
+        val openId = document?.id?.takeIf { it in ids }
+        var openEmpty = false
+        document?.takeIf { it.id == openId }?.let { open ->
             saveNow()
+            openEmpty = noteOf(open)?.isEmpty == true
             closeEditor()
         }
         for (id in ids) {
-            try { store.moveToTrash(id) } catch (e: Exception) { problem = "A note could not be moved to the Trash: ${e.message}" }
+            try {
+                val empty = if (id == openId) openEmpty else runCatching { store.load(id).isEmpty }.getOrDefault(false)
+                if (empty) store.delete(id) else store.moveToTrash(id)
+            } catch (e: Exception) {
+                problem = "A note could not be moved to the Trash: ${e.message}"
+            }
         }
         selectedNotes = selectedNotes - ids
         refresh()
@@ -368,20 +398,35 @@ class NotesModel(private val home: File, private val scope: CoroutineScope) {
 
     // --- Folders --------------------------------------------------------------------------
 
-    /** Makes a folder inside [parent], or at the top, shows it, and asks for its name. */
+    /**
+     * Asks for the name of a new folder inside [parent], or at the top. Nothing is made until a
+     * name is given ([createFolder]); leaving the name empty makes nothing at all.
+     */
     fun newFolder(parent: Id? = null) {
+        if (store == null) return
+        renamingFolder = null
+        if (parent != null) expandedFolders = expandedFolders.plusElement(parent)
+        namingNewFolderIn = parent ?: TOP
+    }
+
+    /** The new folder's name was typed: makes it and shows it. Empty, nothing is made. */
+    fun createFolder(name: String) {
+        val parent = namingNewFolderIn as? Id
+        namingNewFolderIn = null
         val store = store ?: return
-        val taken = folders.filter { it.parent == parent }.map { it.name }.toSet()
-        val name = generateSequence(1) { it + 1 }.map { if (it == 1) "New Folder" else "New Folder $it" }.first { it !in taken }
+        val trimmed = name.trim()
+        if (trimmed.isEmpty()) return
         try {
-            val id = store.createFolder(name, parent)
-            if (parent != null) expandedFolders = expandedFolders.plusElement(parent)
+            val id = store.createFolder(trimmed, parent)
             refresh()
             show(Place.InFolder(id))
-            renamingFolder = id
         } catch (e: Exception) {
             problem = "The folder could not be made: ${e.message}"
         }
+    }
+
+    fun cancelNewFolder() {
+        namingNewFolderIn = null
     }
 
     /** Gives a folder a new name. An empty name leaves the name it had. */
@@ -629,6 +674,9 @@ class NotesModel(private val home: File, private val scope: CoroutineScope) {
     }
 
     companion object {
+        /** What [namingNewFolderIn] holds for a new folder at the top level. */
+        val TOP = Any()
+
         /**
          * The shortest passphrase accepted. Argon2id is set for speed (LockFormat.md), so it is
          * the passphrase's own length that keeps guessing slow.

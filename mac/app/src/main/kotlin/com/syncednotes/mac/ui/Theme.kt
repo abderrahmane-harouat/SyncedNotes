@@ -6,6 +6,7 @@ import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 /**
@@ -87,6 +88,14 @@ object MacType {
     val title = TextStyle(fontSize = 20.sp, fontWeight = FontWeight.Bold)
     val headline = TextStyle(fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
 }
+
+/**
+ * The height of the row of buttons at the top of each column. The window's content runs under
+ * its transparent title bar, whose top 28 points belong to the window: two quick clicks there
+ * zoom it, whatever is drawn. So the buttons sit in a row below that strip.
+ */
+val HEADER_HEIGHT = 64.dp
+val TITLE_BAR = 28.dp
 
 val LocalMacColors = staticCompositionLocalOf { LightColors }
 

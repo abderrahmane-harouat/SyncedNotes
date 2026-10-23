@@ -1,0 +1,10 @@
+# What GitHub counts as the project's languages.
+
+# The Swift app, version 0.1.0, kept as reference until the Kotlin apps do everything it did:
+# neither app is built from it, so it is not what SyncedNotes is written in.
+SyncedNotes/** linguist-vendored
+SyncedNotesCore/**/*.swift linguist-vendored
+Scripts/make-app-icon.swift linguist-vendored
+
+# Made by protoc from SyncedNotesCore/Proto; never edited by hand.
+shared/core/Generated/** linguist-generated

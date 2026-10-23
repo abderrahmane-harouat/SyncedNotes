@@ -124,6 +124,7 @@ fun NotesWindow(
             null -> {}
         }
         if (model.changingPassphrase) ChangePassphraseSheet(model)
+        model.sync?.let { if (model.pairingPhone) PairPhoneSheet(model, it) }
         if (model.importWaitingForPassphrase != null) BackupPassphraseSheet(model)
         model.problem?.let { AlertSheet("Something went wrong", it) { model.problem = null } }
         model.notice?.let { AlertSheet("Done", it) { model.notice = null } }

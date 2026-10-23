@@ -4,8 +4,9 @@
 
 # SyncedNotes
 
-Encrypted notes for the Mac. No server, no account, no cloud: your notes are locked with a
-passphrase only you know, and they never leave the Mac, not even to Apple.
+Encrypted notes for the Mac and an Android phone. No server, no account, no cloud: your notes
+are locked with a passphrase only you know, and they go only between your own Mac and phone,
+over your own network, never to Apple or Google.
 
 **Version 0.2.0, being rebuilt.** Version 0.1.0 was a SwiftUI app; since 2026-10-22 the Mac
 app is built without Xcode or Swift, in Kotlin, around the same note engine as the phone
@@ -34,6 +35,10 @@ and is never saved over), rich copy and paste, dragging notes onto folders, typi
   everything. A picture can be clicked, copied, and pasted into other apps.
 - **Light and dark mode**, with text that stays readable when the Mac switches between them.
 - **Encrypted backups** to a file you choose, and a passphrase you can change at any time.
+- **The same notes on your phone.** Pair the Android app once (File > Pair a Phone… on the
+  Mac, Pair with your Mac on the phone, then check that both show the same code); from then
+  on each keeps the other's changes whenever both are open on the same network. Nothing goes
+  through the internet ([`Docs/Sync.md`](Docs/Sync.md)).
 
 ## Your passphrase
 
@@ -113,6 +118,21 @@ ditto mac/app/build/compose/binaries/main/app/SyncedNotes.app /Applications/Sync
 rm -rf mac/app/build/compose/binaries/main/app/SyncedNotes.app
 ```
 
+### The phone app
+
+Needs the Android SDK command-line tools with platform 36 and NDK 28.2 (`ANDROID_HOME`), and
+Rust's Android targets (`rustup target add aarch64-linux-android x86_64-linux-android`).
+
+```bash
+cd android
+./gradlew :app:assembleDebug
+adb install -r app/build/outputs/apk/debug/app-debug.apk
+```
+
+`./gradlew :app:run -PtryUnlock -PtryPairing` in `mac/` pairs the try-out notes with the
+first phone whose pairing screen is open, accepting its code on the Mac side, to try sync on
+made-up notes.
+
 ## The project
 
 | | |
@@ -161,8 +181,7 @@ the Kotlin lock.
 ## Roadmap
 
 Automatic encrypted backups, auto-lock and Touch ID come first; then find and replace, links,
-tags, export to Markdown and PDF, and note history. An iPhone app with sync between your own
-devices, over the local network only, is further off. The full list is in [`TODO.md`](TODO.md).
+tags, export to Markdown and PDF, and note history. An iPhone app is further off. The full list is in [`TODO.md`](TODO.md).
 
 ## License
 

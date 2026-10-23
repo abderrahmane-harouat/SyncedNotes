@@ -19,11 +19,15 @@ import com.syncednotes.engine.editor.Composer
 import com.syncednotes.engine.text.ParagraphStyle
 import com.syncednotes.engine.text.Role
 import com.syncednotes.core.NoteFormat
+import com.syncednotes.core.sync.Discovery
+import com.syncednotes.core.sync.SyncRole
+import com.syncednotes.core.sync.SyncService
 import java.io.File
 import java.time.LocalDate
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -59,7 +63,14 @@ class OpenNote(
  * Saving: a note is saved a moment after typing stops, and always before switching notes,
  * locking, or quitting. A note left empty is removed when it is left, as in Notes.
  */
-class NotesModel(private val home: File, private val scope: CoroutineScope) {
+class NotesModel(
+    private val home: File,
+    private val scope: CoroutineScope,
+    /** How the phone is found on the network; none in tests, which then never sync. */
+    discovery: Discovery? = null,
+    /** A fixed port to listen on: for testing with a phone over `adb reverse`. */
+    syncPort: Int? = null,
+) {
 
     sealed interface Phase {
         /** Nothing is unlocked. [firstRun] when no passphrase has been chosen yet. */
@@ -131,6 +142,23 @@ class NotesModel(private val home: File, private val scope: CoroutineScope) {
         private set
 
     private var store: NoteStore? = null
+
+    /** Sync with the paired phones (Docs/Sync.md), while the notes are unlocked. */
+    val sync: SyncService? = discovery?.let {
+        SyncService(
+            role = SyncRole.MAC,
+            deviceName = ::computerName,
+            discovery = it,
+            scope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+            // Back on the window's thread, which every change to what it shows is made on.
+            onRemoteChange = { ids -> scope.launch { remoteChanged(ids) } },
+            fixedPort = syncPort,
+        )
+    }
+
+    /** Whether the Pair a Phone sheet is open. */
+    var pairingPhone by mutableStateOf(false)
+
     /** The engine showing the open note; the note's text lives there while it is open. */
     private var editor: Composer? = null
     /** What read the open note into the engine, and writes it out again. */
@@ -192,16 +220,20 @@ class NotesModel(private val home: File, private val scope: CoroutineScope) {
         phase = Phase.Unlocked
         refresh()
         summaries.firstOrNull()?.let { select(it.id) }
+        sync?.attach(opened)
     }
 
     /** Quitting: the note on screen is saved, or removed if it was left empty. */
     fun quit() {
         leaveCurrentNote()
+        sync?.detach()
     }
 
     /** Saves, then forgets the keys and everything decrypted. */
     fun lock() {
         leaveCurrentNote()
+        sync?.detach()
+        pairingPhone = false
         store?.close()
         store = null
         document = null
@@ -582,6 +614,7 @@ class NotesModel(private val home: File, private val scope: CoroutineScope) {
         val open = document?.id
         val shown = place
         closeEditor()
+        sync?.detach()
         store.close()
         this.store = null
         var opened = vault
@@ -602,7 +635,35 @@ class NotesModel(private val home: File, private val scope: CoroutineScope) {
         place = shown
         refresh()
         open?.let { select(it) }
+        // The phones are given the new vault the next time they connect (Docs/Sync.md).
+        this.store?.let { sync?.attach(it) }
         if (opened.header != vault.header) throw Message("The passphrase was not changed, and your notes are as they were.")
+    }
+
+    // --- Sync ------------------------------------------------------------------------------
+
+    /**
+     * Notes came in from the phone. The list shows them; the open note is shown again in its
+     * new version only when nothing typed here waits to be saved, since otherwise the next save
+     * is the newer one and goes to the phone instead.
+     */
+    fun remoteChanged(ids: Set<Id>) {
+        val store = store ?: return
+        refresh()
+        val open = document ?: return
+        if (open.id !in ids || unsaved) return
+        if (store.isDeleted(open.id)) {
+            closeEditor()
+            return
+        }
+        try {
+            val stored = store.load(open.id)
+            document = OpenNote(open.id, stored, inTrash = store.isInTrash(open.id), editable = NoteFormat.canEdit(stored))
+            editorNote = null
+            showInEditor()
+        } catch (e: Exception) {
+            problem = "The note from the phone could not be opened: ${e.message}"
+        }
     }
 
     // --- Backups --------------------------------------------------------------------------

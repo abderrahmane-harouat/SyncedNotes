@@ -5,9 +5,15 @@
 	<!-- The whole list of what the app may do beyond its own sandbox folder. See Privacy.md. -->
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
-	<!-- Files the user picks in a Save or Open dialog, for backups. No other files, and no
-	     network: nothing can leave the Mac through this app. -->
+	<!-- Files the user picks in a Save or Open dialog, for backups. No other files. -->
 	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<!-- Sync with the paired phone (Docs/Sync.md): listening for it and connecting to it,
+	     on the local network only. The app refuses any address outside it, and connects to
+	     nothing else. -->
+	<key>com.apple.security.network.server</key>
+	<true/>
+	<key>com.apple.security.network.client</key>
 	<true/>
 </dict>
 </plist>

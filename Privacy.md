@@ -6,10 +6,11 @@ and what is still open. The encryption itself (keys, locked items, backups) is d
 
 ## The rule
 
-The notes hold live credentials. Note content stays on the Mac, encrypted, and goes nowhere
-else, and that includes Apple. No cloud, no backup service, no assistant, no AI feature, no
-analytics. A backup goes only where the user saves it, locked. Should sync with a second
-device come, it goes to that device over the local network, encrypted, and nowhere else.
+The notes hold live credentials. Note content stays on the user's own two devices, the Mac
+and the paired phone, encrypted, and goes nowhere else, and that includes Apple and Google.
+No cloud, no backup service, no assistant, no AI feature, no analytics. A backup goes only
+where the user saves it, locked. Sync goes straight from one device to the other over the
+local network, encrypted twice ([`Docs/Sync.md`](Docs/Sync.md)), and nowhere else.
 
 "Note content" means the text, titles, folder names, pictures, the passphrase, what is
 searched for, and anything derived from them, like previews, search indexes, screenshots, or
@@ -89,10 +90,11 @@ Done:
   quitting.
 - **Deleting a note moves it to the Trash first**, where it stays, locked like any other note,
   for 30 days or until deleted permanently; then only an empty marker is left.
-- **App Sandbox with no network**, and access only to files the user picks in a Save or Open
-  dialog, for backups (`mac/packaging/SyncedNotes.entitlements`). macOS stops the app
-  connecting anywhere, whatever the code does. Checked: the packaged app opens its notes
-  inside the sandbox. The libraries the app loads (the Rust engine, SQLite's) are inside the
+- **App Sandbox**, with access only to files the user picks in a Save or Open dialog, for
+  backups, and to the network for sync (`mac/packaging/SyncedNotes.entitlements`). Before
+  2026-10-23 the sandbox had no network at all; sync needs it. What keeps notes on the local
+  network is now the app's own code (below), which a network monitor can check. Checked:
+  the packaged app opens its notes inside the sandbox. The libraries the app loads (the Rust engine, SQLite's) are inside the
   app and covered by its signature: the sandbox refuses to load code the app writes itself,
   which is what SQLite's driver would otherwise do.
 - **Backups are locked like everything else**: one sealed item, under the passphrase.
@@ -115,12 +117,46 @@ Done:
   made-up notes may be captured, to check the app's look; the app never allows it with the
   real notes.
 
+- **Sync stays on the local network** (`Docs/Sync.md`). The Mac finds the phone with Bonjour,
+  macOS's multicast DNS, answered by the devices on the network and no server; it announces
+  itself under the name "SyncedNotes", never the Mac's own, and only while unlocked and paired
+  or pairing. It accepts connections only from, and connects only to, local addresses
+  (private, link-local, loopback), and every connection must prove it is the paired phone
+  before anything is sent. Notes travel as the locked items they are, inside a session
+  encrypted with keys that die with it. macOS asks once before the app may use the local
+  network (`NSLocalNetworkUsageDescription`), and lets it look only for the two services
+  named in its Info.plist. The Mac's own name goes to the phone only while pairing, which the
+  user starts and confirms with a code on both screens.
+
 And:
 
 - If the encryption key ever goes in the keychain, the entry is not synchronizable and is tied
   to this device.
 
+## The phone app
+
+The same rule, the same engine (no Android text view, so no spell checker, autofill or
+keyboard learning sees a note), the same lock and store as the Mac, and the same sync.
+
+- **Notes at rest** are in the app's own storage, which no other app can read, locked as on
+  the Mac: SQLCipher for Android (`net.zetetic:sqlcipher-android`) with the vault's database
+  key, each note its own locked item.
+- **Never backed up off the phone**: `allowBackup` is off, and the data extraction rules keep
+  everything out of Google's cloud backup and out of the transfer to a new phone.
+- **The notes lock** after five minutes away from the app, and from the menu.
+- **The few text fields** (passphrase, search, folder names) tell the keyboard not to learn or
+  suggest (`IME_FLAG_NO_PERSONALIZED_LEARNING`; Gboard and Samsung Keyboard then show their
+  incognito mark), and every window is closed to autofill services and to content capture,
+  which would hand what is on screen to another app or the system's intelligence.
+- **The network**: Android's `INTERNET` permission, which it requires for any socket, local
+  ones included. The phone finds the Mac with Network Service Discovery (multicast DNS on the
+  local network) and refuses any address outside it, as the Mac does.
+
 ## Open issues
+
+- **Recent apps** on the phone shows a picture of the last screen. `FLAG_SECURE` would hide it,
+  and screenshots with it; not set yet.
+- **The phone's dark theme** is not done: the app is light whatever the system's setting.
 
 - **⌃⌘D (Look Up) and other system shortcuts** were not tried by hand in the new app.
 - **The dictation key** still reaches macOS's own Dictation, which the app cannot refuse:
@@ -153,8 +189,8 @@ What the app cannot switch off for you. Checked on this Mac on 2026-10-07:
 
 ## How to check
 
-- Run the app under a network monitor (LuLu is free and open source). There should be no
-  connection at all.
+- Run the app under a network monitor (LuLu is free and open source). The only connections
+  should be to the paired phone's local address, and Bonjour's multicast on the local network.
 - Take a screenshot (⇧⌘4, then Space, then click the window): the app's window should come out
   blank.
 - Right-click a note: only editing commands. The Edit menu: no Writing Tools, AutoFill or Start

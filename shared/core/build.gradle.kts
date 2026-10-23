@@ -2,6 +2,10 @@ plugins {
     kotlin("jvm")
 }
 
+// Built by both the Mac's and the phone's builds: each into a folder of its own, so one never
+// rewrites the classes the other is running from.
+layout.buildDirectory = layout.projectDirectory.dir("build/${rootProject.name}")
+
 kotlin {
     jvmToolchain(27)
     compilerOptions {

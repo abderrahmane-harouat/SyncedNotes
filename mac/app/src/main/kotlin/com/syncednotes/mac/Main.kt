@@ -20,6 +20,7 @@ import androidx.compose.ui.window.MenuBar
 import androidx.compose.ui.window.Window
 import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
+import com.syncednotes.core.sync.SyncService
 import com.syncednotes.engine.text.Alignment
 import com.syncednotes.engine.text.CharStyle
 import com.syncednotes.engine.text.ListType
@@ -29,12 +30,14 @@ import com.syncednotes.mac.ui.NotesWindow
 import com.syncednotes.mac.ui.resize
 import com.syncednotes.mac.ui.toggleHighlight
 import java.awt.AWTEvent
-import kotlinx.coroutines.delay
 import java.awt.Desktop
 import java.awt.Toolkit
 import java.awt.FileDialog
 import java.io.File
 import javax.swing.SwingUtilities
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 
 /**
  * Where the notes live: `~/Library/Application Support/SyncedNotes`. A run made to try the app
@@ -63,6 +66,15 @@ private fun allowCapture(): Boolean = System.getProperty("syncednotes.allowCaptu
  */
 private fun tryPassphrase(): String? = System.getProperty("syncednotes.tryPassphrase")?.takeIf { folderName() != REAL_FOLDER }
 
+/**
+ * For trying sync on made-up notes with a phone: a fixed port to listen on, so the phone can
+ * reach it over `adb reverse`; and pairing with the first phone ready to pair, its code
+ * accepted here unasked, so the comparing happens on the phone alone. Both ignored for the real
+ * notes, whose pairing is only ever confirmed by hand.
+ */
+private fun trySyncPort(): Int? = System.getProperty("syncednotes.trySyncPort")?.toIntOrNull()?.takeIf { folderName() != REAL_FOLDER }
+private fun tryPairing(): Boolean = System.getProperty("syncednotes.tryPairing") == "true" && folderName() != REAL_FOLDER
+
 /** Text to type into a new note at launch, through the window's own events (SelfTest). */
 private fun selfTestText(): String? = System.getProperty("syncednotes.selfTest")?.takeIf { folderName() != REAL_FOLDER }
 
@@ -72,7 +84,7 @@ fun main() {
     System.setProperty("apple.awt.application.name", "SyncedNotes")
     application {
         val scope = rememberCoroutineScope()
-        val model = remember { NotesModel(notesFolder(), scope) }
+        val model = remember { NotesModel(notesFolder(), scope, BonjourDiscovery(), trySyncPort()) }
         // Quitting saves first; the keys go with the app, nothing of them is kept.
         remember {
             Desktop.getDesktop().setQuitHandler { _, response ->
@@ -119,6 +131,16 @@ fun main() {
             LaunchedEffect(Unit) {
                 KeepOnThisMac.install(allowCapture())
                 tryPassphrase()?.let { model.unlock(it) }
+                if (tryPairing()) model.sync?.let { sync ->
+                    model.pairingPhone = true
+                    launch {
+                        // The first phone that turns up, then its code, accepted here.
+                        sync.phonesReadyToPair.first { it.isNotEmpty() }.first().let(sync::pairWith)
+                        val code = sync.pairing.first { it is SyncService.PairingState.Confirming } as SyncService.PairingState.Confirming
+                        println("Pairing code: ${code.code}")
+                        sync.confirmPairing(true)
+                    }
+                }
                 selfTestText()?.let { text ->
                     delay(1500)
                     // "<folder>" starts naming a new folder instead, to look at its row.
@@ -178,6 +200,7 @@ private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor, layout: Wi
             Item("Export Backup…", shortcut = KeyShortcut(Key.E, meta = true, shift = true), enabled = unlocked, onClick = { exportBackup(model) })
             Item("Import Backup…", shortcut = KeyShortcut(Key.I, meta = true, shift = true), enabled = unlocked, onClick = { importBackup(model) })
             Separator()
+            Item("Pair a Phone…", enabled = unlocked, onClick = { model.pairingPhone = true })
             Item("Change Passphrase…", enabled = unlocked, onClick = { model.changingPassphrase = true })
             Item("Lock Notes", shortcut = KeyShortcut(Key.L, meta = true, ctrl = true), enabled = unlocked, onClick = model::lock)
         }

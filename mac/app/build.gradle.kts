@@ -74,6 +74,19 @@ compose.desktop {
                 bundleID = "com.syncednotes.notes"
                 appCategory = "public.app-category.productivity"
                 iconFile.set(layout.buildDirectory.file("icon/SyncedNotes.icns"))
+                // macOS asks before an app may reach the local network, and lets it look only
+                // for the Bonjour services it names: the phone's and its own (Docs/Sync.md).
+                infoPlist {
+                    extraKeysRawXml = """
+                        <key>NSLocalNetworkUsageDescription</key>
+                        <string>SyncedNotes finds your paired phone on this network to keep your notes the same on both. Nothing goes through the internet.</string>
+                        <key>NSBonjourServices</key>
+                        <array>
+                            <string>_syncednotes._tcp</string>
+                            <string>_syncednotes-phone._tcp</string>
+                        </array>
+                    """.trimIndent()
+                }
             }
         }
     }
@@ -116,7 +129,8 @@ tasks.matching { it.name == "prepareAppResources" || it.name == "createDistribut
     dependsOn(glyphsResource, appIcon)
 }
 
-// Signed on this Mac only, with no Apple account (Privacy.md), and sandboxed with no network.
+// Signed on this Mac only, with no Apple account (Privacy.md), and sandboxed: user-chosen files,
+// and the local network for the paired phone.
 val appVersion = "0.2.0"
 val signApp = tasks.register<Exec>("signApp") {
     dependsOn("createDistributable")
@@ -153,6 +167,8 @@ tasks.withType<JavaExec>().configureEach {
 tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
     val tryUnlock = project.hasProperty("tryUnlock")
     val selfTest = project.findProperty("selfTest") as String?
+    val trySyncPort = project.findProperty("trySyncPort") as String?
+    val tryPairing = project.hasProperty("tryPairing")
     val library = glyphsRelease.asFile.absolutePath
     doFirst {
         (this as JavaExec).jvmArgs(
@@ -164,6 +180,10 @@ tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
         if (tryUnlock) jvmArgs("-Dsyncednotes.tryPassphrase=made-up try passphrase")
         // Types into a new note through the window's own events: -PselfTest="some text".
         selfTest?.let { jvmArgs("-Dsyncednotes.selfTest=$it") }
+        // Sync on the made-up notes with a phone: -PtrySyncPort=48100 listens there, for
+        // `adb reverse`; -PtryPairing pairs with the first phone ready, its code accepted here.
+        trySyncPort?.let { jvmArgs("-Dsyncednotes.trySyncPort=$it") }
+        if (tryPairing) jvmArgs("-Dsyncednotes.tryPairing=true")
     }
 }
 

@@ -1,8 +1,8 @@
 # TODO
 
 What comes next, roughly in order of how much it matters. The rule in
-[`Privacy.md`](Privacy.md) applies to every item: nothing here may send note content off the
-Mac, or to Apple.
+[`Privacy.md`](Privacy.md) applies to every item: nothing here may send note content anywhere
+but the user's own Mac and phone, nor to Apple or Google.
 
 ## Rebuilding the Mac app on the note engine
 
@@ -42,7 +42,7 @@ Until these are done, the Swift app stays in the repo and on the Mac.
 
 - [ ] A screenshot and a screen recording of the real window come out blank.
 - [ ] ⌃⌘D (Look Up) and the dictation key do nothing in a note or a field.
-- [ ] A run under a network monitor (LuLu) shows no connection at all.
+- [ ] A run under a network monitor (LuLu) shows no connection but to the paired phone.
 - [ ] A copy does not reach a second Apple device, even with Handoff on.
 
 ## Writing
@@ -71,8 +71,18 @@ Until these are done, the Swift app stays in the repo and on the Mac.
   exist, but as a separate program that is not in the repo.
 - [ ] Run the app from a fresh vault in a screenshot test, light and dark.
 
-## Later
+## The phone, and sync
 
-- [ ] An iPhone app, and sync between the user's own devices over the local network only,
-  encrypted end to end. The lock format is already written for a second device
-  ([`Docs/LockFormat.md`](Docs/LockFormat.md)).
+Since 2026-10-23 the Android app keeps the same notes as the Mac over the local network
+([`Docs/Sync.md`](Docs/Sync.md)): pairing by a code, then live sync of notes, folders, the
+Trash and pictures. Tried between this Mac's try-out notes and a Galaxy M32.
+
+- [ ] Try the packaged, sandboxed Mac app with the phone (the try-out run is unsandboxed).
+- [ ] The phone's dark theme, and the Mac's appearance choice on the phone.
+- [ ] The phone's own Change Passphrase, and the Mac's passphrase change reaching the phone
+  on screen (the phone is told today; the flow is untried by hand).
+- [ ] Moving folders on the phone (rename, delete and folders inside folders are there).
+- [ ] `FLAG_SECURE` on the phone, so Recent apps shows no note.
+- [ ] Sync in the background on the phone, while the app is closed: today it syncs while open
+  and unlocked, as SyncedPass does.
+- [ ] Deletion marks kept forever: prune those both devices have seen.

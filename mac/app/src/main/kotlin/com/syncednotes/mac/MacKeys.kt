@@ -20,7 +20,8 @@ object MacKeys {
                 KeyEvent.VK_A -> composer.onKey(Key.SELECT_ALL, false, false, t)
                 KeyEvent.VK_C -> copy(composer)
                 KeyEvent.VK_X -> if (shift) return false else if (copy(composer) && composer.editable) composer.onKey(Key.BACKSPACE, false, false, t)
-                KeyEvent.VK_V -> Pasteboard.paste()?.let { composer.type(it.replace("\r\n", "\n").replace('\r', '\n'), t) }
+                // Formatted as it was where it was copied; ⌥⇧⌘V, Paste and Match Style, as plain text.
+                KeyEvent.VK_V -> composer.paste(Pasteboard.paste(), if (shift && event.isAltDown) null else Pasteboard.pasteHtml(), t)
                 // ⌘← and ⌘→ go to the ends of the line, ⌘↑ and ⌘↓ to the ends of the note.
                 KeyEvent.VK_LEFT -> composer.onKey(Key.HOME, shift, false, t)
                 KeyEvent.VK_RIGHT -> composer.onKey(Key.END, shift, false, t)

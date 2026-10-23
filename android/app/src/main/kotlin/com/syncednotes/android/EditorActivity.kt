@@ -351,6 +351,10 @@ class EditorActivity : ScreenActivity() {
                     true
                 }
             } else {
+                // Formatted text from a web page or Notion keeps its headings, lists and code.
+                if (editable && !reading && getSystemService(android.content.ClipboardManager::class.java)?.hasPrimaryClip() == true) {
+                    menu.add("Paste").setOnMenuItemClickListener { canvas.paste(); true }
+                }
                 menu.add("Move to Folder…").setOnMenuItemClickListener { chooseFolder(); true }
                 menu.add("Move to Trash").setOnMenuItemClickListener {
                     saveNow()

@@ -21,6 +21,16 @@ class KeepOnThisMacTest {
     }
 
     @Test
+    fun whatABrowserCopiesAsHtmlIsReadBesideItsPlainText() {
+        val board = Pasteboard.private()
+        board.copyHtml("<h2>Made-up</h2><p><b>café</b></p>", "Made-up\ncafé")
+        assertEquals("<h2>Made-up</h2><p><b>café</b></p>", board.pasteHtml())
+        assertEquals("Made-up\ncafé", board.paste())
+        board.copy("plain only")
+        assertEquals(null, board.pasteHtml())
+    }
+
+    @Test
     fun secureInputIsOnWhileHeldAndOffAgainAfter() {
         val carbon = SymbolLookup.libraryLookup("/System/Library/Frameworks/Carbon.framework/Carbon", Arena.global())
         val enabled = Linker.nativeLinker().downcallHandle(carbon.find("IsSecureEventInputEnabled").get(), FunctionDescriptor.of(ValueLayout.JAVA_BOOLEAN))

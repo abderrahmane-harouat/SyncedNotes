@@ -3,6 +3,8 @@ package com.syncednotes.engine.editor
 import com.syncednotes.engine.layout.DocumentLayout
 import com.syncednotes.engine.layout.ParagraphLayout
 import com.syncednotes.engine.layout.StyleRuns
+import com.syncednotes.engine.paste.Fragment
+import com.syncednotes.engine.paste.Pasted
 import com.syncednotes.engine.render.DrawList
 import com.syncednotes.engine.render.FontFamily
 import com.syncednotes.engine.render.PathBuilder
@@ -186,7 +188,11 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
      * Every change to the text goes through here, so history, the composing region, layout and
      * the input method always agree about what happened.
      */
-    private fun edit(start: Int, end: Int, text: CharSequence, after: Selection, now: Long, mergeable: Boolean, fromInput: Boolean) {
+    private fun edit(
+        start: Int, end: Int, text: CharSequence, after: Selection, now: Long, mergeable: Boolean, fromInput: Boolean,
+        /** Formatting for what was put in, made part of the same undo step. */
+        format: (() -> Unit)? = null,
+    ) {
         if (!editable) return
         val before = selection
         // Typing hides the insertion handle, as on Samsung and stock Android; it comes back
@@ -200,6 +206,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             typingStyle.clear()
             typingValues.clear()
         }
+        format?.invoke()
         history.record(change.start, change.removed, change.inserted, before, after, document.snapshot(), now, mergeable)
         if (composingStart >= 0) {
             val cs = change.map(composingStart)
@@ -303,6 +310,62 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         clearComposing()
         val s = selection.start
         edit(s, selection.end, text, Selection(s + text.length), now, mergeable = true, fromInput = true)
+    }
+
+    /**
+     * Pastes what the clipboard holds, [plain] text and [html] (either may be missing), in
+     * place of the selection, as one undo step. Formatted text from a web page, Notion or
+     * Markdown keeps what a note can hold of it ([Pasted]); into a code block, what is pasted is
+     * code, and goes in as the text it is.
+     */
+    fun paste(plain: String?, html: String?, now: Long) {
+        if (!editable) return
+        val here = document.paragraphStyle(document.paragraphAt(selection.start))
+        val fragment = if (here.role == Role.CODE_BLOCK) null else Pasted.read(plain, html)
+        if (fragment == null) {
+            val text = (plain ?: return).replace("\r\n", "\n").replace('\r', '\n')
+            if (text.isNotEmpty()) type(text, now)
+            return
+        }
+        pasteFragment(fragment, now)
+    }
+
+    /**
+     * Puts [fragment] in place of the selection. Its first paragraph's style is taken only by
+     * a paragraph it begins, so a heading pasted into the middle of a sentence leaves that
+     * sentence what it was. Lines that are all plain take the style of the line they land on,
+     * as typed ones would, so plain lines pasted into a list go on with the list; in what has
+     * headings, lists or code, a plain line is body text, as it was where it was copied from.
+     */
+    private fun pasteFragment(fragment: Fragment, now: Long) {
+        leaveObjectParagraph(now)
+        val sel = selection
+        val start = sel.start
+        val text = fragment.text
+        val firstParagraph = document.paragraphAt(start)
+        val beginsParagraph = start == document.paragraphStart(firstParagraph)
+        val lastParagraph = document.paragraphAt(sel.end)
+        // The paragraph is nothing but what is pasted: everything after the selection in it goes too.
+        val fillsParagraph = beginsParagraph && sel.end == document.paragraphEnd(lastParagraph)
+        val structured = fragment.paragraphs.any { it.style != ParagraphStyle.DEFAULT }
+        val listBase = (0 until document.paragraphCount).maxOfOrNull { p -> document.paragraphStyle(p).lists.maxOfOrNull { it.id } ?: 0 } ?: 0
+        clearComposing()
+        edit(start, sel.end, text, Selection(start + text.length), now, mergeable = false, fromInput = false) {
+            val end = start + text.length
+            for (style in CharStyle.entries) document.setStyle(style, false, start, end)
+            for (style in ValueStyle.entries) document.setValue(style, null, start, end)
+            var at = start
+            for ((k, piece) in fragment.paragraphs.withIndex()) {
+                val p = firstParagraph + k
+                val takesStyle = k > 0 || fillsParagraph || (beginsParagraph && fragment.paragraphs.size > 1)
+                if (takesStyle && (structured || document.paragraphStyle(p).isObject)) {
+                    val lists = piece.style.lists.map { it.copy(id = it.id + listBase) }
+                    document.setParagraphStyle(p, piece.style.copy(lists = lists, direction = document.paragraphStyle(p).direction))
+                }
+                for (span in piece.spans) document.setStyle(span.style, true, at + span.start, at + span.end)
+                at += piece.text.length + 1
+            }
+        }
     }
 
     // --- Input method (the InputConnection maps onto these) -----------------------------

@@ -1,5 +1,6 @@
 package com.syncednotes.android
 
+import android.content.ClipboardManager
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.Canvas
@@ -51,6 +52,23 @@ class NoteCanvasView(context: Context, fonts: FontFamily) : View(context), Compo
     init {
         isFocusable = true
         isFocusableInTouchMode = true
+    }
+
+    /**
+     * Pastes what the clipboard holds in place of the selection, formatted as it was where it
+     * was copied (the HTML a browser or Notion puts beside the text), or as plain text when
+     * [plainOnly]. The clipboard is only ever read, and only here, when asked to paste; nothing
+     * from a note is put on it, so nothing reaches a keyboard's clipboard sync.
+     */
+    fun paste(plainOnly: Boolean = false) {
+        if (!composer.editable) return
+        val clip = context.getSystemService(ClipboardManager::class.java)?.primaryClip ?: return
+        if (clip.itemCount == 0) return
+        val item = clip.getItemAt(0)
+        val html = if (plainOnly) null else item.htmlText
+        val plain = item.text?.toString()
+        if (plain == null && html == null) return
+        composer.paste(plain, html, SystemClock.uptimeMillis())
     }
 
     fun setInsets(top: Int, bottom: Int) {
@@ -114,6 +132,11 @@ class NoteCanvasView(context: Context, fonts: FontFamily) : View(context), Compo
         val shift = event.isShiftPressed
         val word = ctrl || event.isAltPressed
         if (formattingShortcut(keyCode, ctrl, shift, event.isAltPressed)) return true
+        // Ctrl+Shift+V pastes as plain text, as in Chrome and Samsung Notes.
+        if (ctrl && keyCode == KeyEvent.KEYCODE_V) {
+            paste(plainOnly = shift)
+            return true
+        }
         val key = when (keyCode) {
             KeyEvent.KEYCODE_DPAD_LEFT -> Key.LEFT
             KeyEvent.KEYCODE_DPAD_RIGHT -> Key.RIGHT

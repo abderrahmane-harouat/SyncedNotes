@@ -118,19 +118,37 @@ class Pasteboard internal constructor(private val board: () -> MemorySegment) {
         ObjC.sendBoolTwoPointers(b, "setString:forType:", ObjC.nsString(text, arena), ObjC.nsString(PLAIN_TEXT, arena))
     }
 
-    fun paste(): String? = Arena.ofConfined().use { arena ->
-        ObjC.string(ObjC.sendWithPointer(board(), "stringForType:", ObjC.nsString(PLAIN_TEXT, arena)))
+    fun paste(): String? = string(PLAIN_TEXT)
+
+    /**
+     * What was copied as HTML, which browsers and Notion put beside the plain text: how a
+     * paste keeps its formatting. Only read, here on the Mac; nothing it points to is fetched.
+     */
+    fun pasteHtml(): String? = string(HTML)
+
+    private fun string(type: String): String? = Arena.ofConfined().use { arena ->
+        ObjC.string(ObjC.sendWithPointer(board(), "stringForType:", ObjC.nsString(type, arena)))
+    }
+
+    /** Puts [html] on this pasteboard, as a browser would: for tests, on a private one. */
+    internal fun copyHtml(html: String, text: String) = Arena.ofConfined().use { arena ->
+        val b = board()
+        ObjC.sendLongReturnLong(b, "prepareForNewContentsWithOptions:", CURRENT_HOST_ONLY)
+        ObjC.sendBoolTwoPointers(b, "setString:forType:", ObjC.nsString(html, arena), ObjC.nsString(HTML, arena))
+        ObjC.sendBoolTwoPointers(b, "setString:forType:", ObjC.nsString(text, arena), ObjC.nsString(PLAIN_TEXT, arena))
     }
 
     companion object {
         private const val CURRENT_HOST_ONLY = 1L
         private const val PLAIN_TEXT = "public.utf8-plain-text"
+        private const val HTML = "public.html"
 
         /** The Mac's clipboard. */
         val general = Pasteboard { ObjC.send(ObjC.cls("NSPasteboard"), "generalPasteboard") }
 
         fun copy(text: String) = general.copy(text)
         fun paste(): String? = general.paste()
+        fun pasteHtml(): String? = general.pasteHtml()
 
         /** A pasteboard of its own, which nothing else reads: for tests. */
         internal fun private(): Pasteboard {

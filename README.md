@@ -38,6 +38,9 @@ until the new one does everything it did. Not independently reviewed. What comes
   colours it: keywords, types, strings, numbers, comments, preprocessor lines and calls, in
   colours for the light look and the dark one. A comment or a raw string over many lines is
   coloured on every one of them.
+- **Paste keeps the formatting** of what was copied from a web page (Claude, ChatGPT), from
+  Notion, or as Markdown from a Copy button: headings, lists, checklists, quotes, code in its
+  language, bold and the rest. ⌥⇧⌘V on the Mac, Ctrl+Shift+V on the phone, paste plain text.
 - **The same tools on the Mac and the phone.** The phone's toolbar is Samsung Notes': checklist,
   a Text options card with every paragraph and character style, font colour, highlight, size,
   undo and redo, plus a picture button and reading mode. The Mac has the same in its toolbar,

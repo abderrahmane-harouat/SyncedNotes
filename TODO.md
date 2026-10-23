@@ -18,7 +18,10 @@ Until these are done, the Swift app stays in the repo and on the Mac.
 - [ ] A picture amid text on a line (the Swift app could make one), and **tables**; notes
   holding either still open read-only.
 - [ ] Copying and pasting a picture; resizing one.
-- [ ] **Rich copy and paste** between notes, keeping formatting; plain text today.
+- [x] **Rich paste** from web pages, Notion and Markdown (the Copy buttons of Claude and
+  ChatGPT): headings, lists, checklists, quotes, code with its language, dividers, bold,
+  italic, underline, strikethrough, inline code, tables as lines.
+- [ ] **Rich copy** between notes, keeping formatting; plain text today, and none on the phone.
 - [ ] Lists that start as you type: `- `, `* ` or `1. ` at the start of a line.
 - [ ] An Edit menu that acts on the note or the field that has focus.
 - [ ] Dragging notes onto folders, and columns that can be resized.

@@ -110,6 +110,11 @@ Done:
   `Pasteboard`, which marks it for this Mac only (`currentHostOnly`), keeping it out of
   Universal Clipboard; Compose's fields are given that pasteboard in place of Java's. A
   passphrase field refuses to copy at all.
+- **Pasting reads, and fetches nothing.** ⌘V reads the plain text and the HTML a browser or
+  Notion put on the pasteboard, to keep headings, lists and code as they were (`HtmlReader`,
+  `MarkdownReader` in the engine). Only the markup is read: a picture or link in it is never
+  loaded, so a paste cannot reach the network or tell a site it was pasted. ⌥⇧⌘V pastes the
+  plain text alone.
 - **Passphrase fields turn on secure input** while they have focus, shown or hidden, so other
   apps cannot watch the keystrokes; it is turned off again exactly once (`SecureInput`).
 - **Windows are kept out of screenshots and screen recording** (`sharingType = .none`).
@@ -157,6 +162,11 @@ keyboard learning sees a note), the same lock and store as the Mac, and the same
   written afresh before it is kept, so a photo's location, date and camera never enter a note;
   it is decoded on the device itself (Android's decoder, the JDK's ImageIO), and locked like a
   note.
+- **The clipboard is read, never written.** Paste (the note's menu, a keyboard's paste key,
+  Ctrl+V) reads the clipboard into the note, formatted from its HTML as on the Mac, fetching
+  nothing it points to. Nothing from a note is ever put on the clipboard: Samsung Keyboard and
+  Gboard can sync what is copied to their clouds, so copy and cut wait until that can be kept
+  off the phone.
 - **The network**: Android's `INTERNET` permission, which it requires for any socket, local
   ones included. The phone finds the Mac with Network Service Discovery (multicast DNS on the
   local network) and refuses any address outside it, as the Mac does.

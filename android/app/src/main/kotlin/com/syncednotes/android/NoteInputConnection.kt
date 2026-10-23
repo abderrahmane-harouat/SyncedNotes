@@ -87,12 +87,16 @@ class NoteInputConnection(private val view: NoteCanvasView, private val composer
     }
 
     override fun performContextMenuAction(id: Int): Boolean {
-        if (id == android.R.id.selectAll) {
-            composer.onKey(Key.SELECT_ALL, shift = false, word = false, now = now())
-            return true
+        when (id) {
+            android.R.id.selectAll -> composer.onKey(Key.SELECT_ALL, shift = false, word = false, now = now())
+            // A keyboard's paste key: the clipboard read into the note, formatted or plain.
+            android.R.id.paste -> view.paste()
+            android.R.id.pasteAsPlainText -> view.paste(plainOnly = true)
+            // Cut and copy wait for a decision about the clipboard: a keyboard may sync what is
+            // copied to its cloud, which a note must never reach.
+            else -> return false
         }
-        // Cut, copy and paste wait for the engine's own menu and a decision about the clipboard.
-        return false
+        return true
     }
 
     override fun beginBatchEdit(): Boolean {

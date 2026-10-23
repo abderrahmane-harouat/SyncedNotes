@@ -150,10 +150,13 @@ in the real ones. The installed app keeps its notes in its sandbox folder,
 notes from the Swift app (`com.syncednotes.mac`) come across through a backup (File > Import
 Backup…).
 
-To install, quit SyncedNotes, copy the app to `/Applications`, and delete the build's copy, so
-there is only one SyncedNotes on the Mac:
+To install, quit SyncedNotes, replace the app in `/Applications`, and delete the build's copy,
+so there is only one SyncedNotes on the Mac. The old app goes first: copied over it, the new one
+would keep the old version's files beside its own, which breaks its signature. The notes are in
+the sandbox folder above, not in the app, so replacing it leaves them as they are.
 
 ```bash
+rm -rf /Applications/SyncedNotes.app
 ditto mac/app/build/compose/binaries/main/app/SyncedNotes.app /Applications/SyncedNotes.app
 rm -rf mac/app/build/compose/binaries/main/app/SyncedNotes.app
 ```

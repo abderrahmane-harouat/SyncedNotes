@@ -79,6 +79,7 @@ fun EditorPane(
             }
             model.selectedNotes.size > 1 -> {}
         }
+        if (editor.finding && open != null) FindBar(editor)
         Box(Modifier.weight(1f).fillMaxWidth()) {
             // Always there, so the engine keeps its place; covered when no note is open.
             NoteCanvas(editor, Modifier.fillMaxSize())
@@ -97,6 +98,56 @@ fun EditorPane(
             }
         }
     }
+}
+
+/**
+ * Find in Note: a field over the note, how many matches there are, and buttons to go from one
+ * to the next. The matches are marked in the note itself, by the engine.
+ */
+@Composable
+private fun FindBar(editor: Editor) {
+    val c = colors
+    val composer = editor.composer
+    // Read so the count follows the note as it changes under the bar.
+    editor.frame
+    LaunchedEffect(Unit) { editor.findFocus.requestFocus() }
+    LaunchedEffect(editor.findText) { composer.find(editor.findText) }
+    val count = composer.matchCount
+    Row(
+        Modifier.fillMaxWidth().background(c.banner).padding(horizontal = 12.dp, vertical = 6.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    ) {
+        PlainTextField(
+            editor.findText, { editor.findText = it }, "Find in Note",
+            Modifier.width(260.dp),
+            onSubmit = { composer.findNext() },
+            onCancel = { closeFind(editor) },
+            focusRequester = editor.findFocus,
+            leading = { Icon(Icons.search, c.secondaryText, size = 14.dp) },
+        )
+        BasicText(
+            when {
+                editor.findText.isEmpty() -> ""
+                count == 0 -> "Not found"
+                else -> "${composer.currentMatch + 1} of $count"
+            },
+            Modifier.width(80.dp),
+            style = MacType.body.copy(color = c.secondaryText),
+        )
+        ToolbarButton(Icons.chevronUp, "Previous (⇧⌘G)", { composer.findNext(forward = false) }, enabled = count > 0)
+        ToolbarButton(Icons.chevronDown, "Next (⌘G)", { composer.findNext() }, enabled = count > 0)
+        Spacer(Modifier.weight(1f))
+        MacButton("Done", { closeFind(editor) })
+    }
+}
+
+/** Closes Find, leaving the caret on the match it was on, in the note. */
+fun closeFind(editor: Editor) {
+    editor.finding = false
+    editor.findText = ""
+    editor.composer.endFind(now())
+    editor.focus.requestFocus()
 }
 
 @Composable

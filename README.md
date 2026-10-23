@@ -29,12 +29,14 @@ and is never saved over), rich copy and paste, dragging notes onto folders, typi
 - **Folders, inside folders.** Drag notes onto a folder, or right-click a note and choose
   Move To. Select several notes with ⌘-click or ⇧-click to move or delete them together.
 - **A Trash.** Deleted notes stay there for 30 days and can be restored.
-- **Search** over every word of every note.
+- **Search** over every word of every note, and **Find in Note** (⌘F) marking every match in
+  the note open, on the Mac and the phone alike.
 - **Paste from anywhere.** Text pasted from a web page or another app takes the note's own
   font, size and colour, keeping bold, italic, lists and pictures. Copying between notes keeps
   everything. A picture can be clicked, copied, and pasted into other apps.
 - **Light and dark mode**, with text that stays readable when the Mac switches between them.
-- **Encrypted backups** to a file you choose, and a passphrase you can change at any time.
+- **Encrypted backups** to a file you choose, imported by adding to your notes or replacing
+  them (what the backup lacks goes to the Trash), and a passphrase you can change at any time.
 - **The same notes on your phone.** Pair the Android app once (File > Pair a Phone… on the
   Mac, Pair with your Mac on the phone, then check that both show the same code); from then
   on each keeps the other's changes whenever both are open on the same network. Nothing goes

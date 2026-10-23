@@ -50,6 +50,7 @@ object Icons {
     val drive = icon("externaldrive", "M3.5 14h17v3.5a2 2 0 0 1-2 2h-13a2 2 0 0 1-2-2z", "M3.5 14l2.6-7.5h11.8L20.5 14", filled = listOf("M16.2 16.75a1 1 0 1 0 2 0a1 1 0 1 0-2 0z"))
     val chevronRight = icon("chevron.right", "M9.5 6l6 6-6 6")
     val chevronDown = icon("chevron.down", "M6 9.5l6 6 6-6")
+    val chevronUp = icon("chevron.up", "M6 14.5l6-6 6 6")
     val restore = icon("arrow.uturn.backward", "M9 14L4.5 9.5 9 5", "M4.5 9.5h10a5 5 0 0 1 0 10H11")
     val stack = icon("square.stack", "M7 8.5h12a1 1 0 0 1 1 1V19a1 1 0 0 1-1 1H7a1 1 0 0 1-1-1V9.5a1 1 0 0 1 1-1z", "M8.5 5.5h9", "M10 3h6")
     val bullets = icon("list.bullet", "M9.5 6.5h10", "M9.5 12h10", "M9.5 17.5h10", filled = listOf(

@@ -32,7 +32,7 @@ import com.syncednotes.engine.text.ListType
  * painted on screen.
  */
 class NoteCanvasView(context: Context, fonts: FontFamily) : View(context), ComposerHost {
-    val composer = Composer(fonts, EditorStyle.samsungLike(resources.displayMetrics.density, minOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels)), this)
+    val composer = Composer(fonts, EditorStyle.samsungLike(resources.displayMetrics.density, minOf(resources.displayMetrics.widthPixels, resources.displayMetrics.heightPixels), context.isDark), this)
     private val drawList = DrawList()
     private var bitmap: Bitmap? = null
     private val inputMethods = context.getSystemService(InputMethodManager::class.java)

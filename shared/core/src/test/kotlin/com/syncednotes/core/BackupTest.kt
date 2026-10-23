@@ -204,4 +204,33 @@ class BackupTest {
         mine.delete(id(2))
         assertEquals(listOf("Kept"), Backup.open(Backup.make(mine), mine.vault).notesList.map { it.note.title })
     }
+
+    @Test
+    fun replacingWithABackupPutsTheNotesItLacksInTheTrashAndDeletesItsMissingFolders(): Unit = newStore("made-up passphrase").use { mine ->
+        val kept = mine.createFolder("Kept", now = at(50))
+        mine.save("In the backup", 1, 100)
+        mine.moveNote(id(1), kept, at(100))
+        val file = Backup.make(mine)
+        val later = mine.createFolder("Made later", now = at(150))
+        mine.save("Written after the backup", 2, 200)
+        mine.moveNote(id(2), later, at(200))
+
+        val result = Backup.restore(Backup.open(file, mine.vault), mine, at(300), replace = true)
+        assertEquals(1, result.trashed)
+        assertEquals(1, result.foldersDeleted)
+        assertEquals(listOf("In the backup"), mine.summaries().map { it.title })
+        assertEquals(listOf("Written after the backup"), mine.trash().map { it.title })
+        assertEquals(listOf("Kept"), mine.folders().map { it.name })
+        assertEquals(kept, mine.folderOf(id(1)))
+    }
+
+    @Test
+    fun addingFromABackupLeavesEveryNoteHere(): Unit = newStore("made-up passphrase").use { mine ->
+        mine.save("In the backup", 1, 100)
+        val file = Backup.make(mine)
+        mine.save("Written after the backup", 2, 200)
+        Backup.restore(Backup.open(file, mine.vault), mine, at(300))
+        assertEquals(setOf("In the backup", "Written after the backup"), mine.summaries().map { it.title }.toSet())
+        assertTrue(mine.trash().isEmpty())
+    }
 }

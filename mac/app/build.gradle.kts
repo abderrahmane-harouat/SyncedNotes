@@ -169,6 +169,7 @@ tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
     val selfTest = project.findProperty("selfTest") as String?
     val trySyncPort = project.findProperty("trySyncPort") as String?
     val tryPairing = project.hasProperty("tryPairing")
+    val tryFind = project.findProperty("tryFind") as String?
     val library = glyphsRelease.asFile.absolutePath
     doFirst {
         (this as JavaExec).jvmArgs(
@@ -184,6 +185,8 @@ tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
         // `adb reverse`; -PtryPairing pairs with the first phone ready, its code accepted here.
         trySyncPort?.let { jvmArgs("-Dsyncednotes.trySyncPort=$it") }
         if (tryPairing) jvmArgs("-Dsyncednotes.tryPairing=true")
+        // Opens Find in Note on the first note with this word: -PtryFind=word.
+        tryFind?.let { jvmArgs("-Dsyncednotes.tryFind=$it") }
     }
 }
 

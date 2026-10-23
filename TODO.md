@@ -78,11 +78,13 @@ Since 2026-10-23 the Android app keeps the same notes as the Mac over the local 
 Trash and pictures. Tried between this Mac's try-out notes and a Galaxy M32.
 
 - [ ] Try the packaged, sandboxed Mac app with the phone (the try-out run is unsandboxed).
-- [ ] The phone's dark theme, and the Mac's appearance choice on the phone.
-- [ ] The phone's own Change Passphrase, and the Mac's passphrase change reaching the phone
-  on screen (the phone is told today; the flow is untried by hand).
-- [ ] Moving folders on the phone (rename, delete and folders inside folders are there).
-- [ ] `FLAG_SECURE` on the phone, so Recent apps shows no note.
+- [x] The phone's dark theme, with the Mac's choice of System, Light or Dark.
+- [x] The phone's own Change Passphrase, for a phone not paired.
+- [ ] The Mac's passphrase change reaching the phone on screen (the phone is told today, and
+  asks for the new one; the flow is untried by hand).
+- [x] Moving folders on the phone.
+- [x] `FLAG_SECURE` on the phone, so Recent apps shows no note.
+- [x] Find in Note on both, every match marked.
 - [ ] Sync in the background on the phone, while the app is closed: today it syncs while open
   and unlocked, as SyncedPass does.
 - [ ] Deletion marks kept forever: prune those both devices have seen.

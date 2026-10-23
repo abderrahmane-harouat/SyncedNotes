@@ -131,6 +131,10 @@ class NotesModel(
     var notice: String? by mutableStateOf(null)
     /** A backup from another vault, waiting for that vault's passphrase before it can be read. */
     var importWaitingForPassphrase: ByteArray? by mutableStateOf(null)
+    /** A backup chosen to import, waiting to hear whether it adds to the notes or replaces them. */
+    var importToChoose: ByteArray? by mutableStateOf(null)
+    /** Whether the import under way replaces the notes rather than adding to them. */
+    private var importReplaces = false
     var search: String = ""
         set(value) {
             field = value
@@ -701,10 +705,29 @@ class NotesModel(
         val store = store ?: return
         try {
             val bytes = file.readBytes()
-            val header = Backup.vaultHeader(bytes)
-            if (header == store.vault.header) restore(Backup.open(bytes, store.vault)) else importWaitingForPassphrase = bytes
+            // Read once here, so a file that is not a backup is said to be so before any choice.
+            Backup.vaultHeader(bytes)
+            importToChoose = bytes
         } catch (_: Backup.NotABackupException) {
             problem = "“${file.name}” is not a SyncedNotes backup."
+        } catch (e: Exception) {
+            problem = "The backup could not be read: ${e.message}"
+        }
+    }
+
+    /**
+     * Imports the chosen backup, adding its notes to these, or, with [replace], making the notes
+     * the backup's: what it lacks goes to the Trash (Backup.restore). One from this vault is
+     * restored straight away; one from another waits for its passphrase.
+     */
+    fun chooseImport(replace: Boolean) {
+        val bytes = importToChoose ?: return
+        importToChoose = null
+        val store = store ?: return
+        importReplaces = replace
+        try {
+            if (Backup.vaultHeader(bytes) == store.vault.header) restore(Backup.open(bytes, store.vault))
+            else importWaitingForPassphrase = bytes
         } catch (e: Exception) {
             problem = "The backup could not be read: ${e.message}"
         }
@@ -732,11 +755,16 @@ class NotesModel(
 
     private fun restore(backup: StoredBackup) {
         val store = store ?: return
-        val result = Backup.restore(backup, store)
+        saveNow()
+        val result = Backup.restore(backup, store, replace = importReplaces)
+        importReplaces = false
         val shown = document?.id
         refresh()
         // The note on screen may be one the backup just brought up to date.
-        if (shown != null && result.restored > 0) {
+        if (shown != null && store.isInTrash(shown)) {
+            closeEditor()
+            summaries.firstOrNull()?.let { select(it.id) }
+        } else if (shown != null && result.restored > 0) {
             closeEditor()
             select(shown)
         } else if (document == null) {
@@ -770,9 +798,13 @@ class NotesModel(
                 val one = result.keptNewer == 1
                 " ${notes(result.keptNewer)} changed here after the backup ${if (one) "was" else "were"} kept as ${if (one) "it is" else "they are"}."
             } else ""
+            val replaced = buildString {
+                if (result.trashed > 0) append(" ${notes(result.trashed)} not in the backup went to the Trash.")
+                if (result.foldersDeleted > 0) append(" ${result.foldersDeleted} ${if (result.foldersDeleted == 1) "folder" else "folders"} not in the backup ${if (result.foldersDeleted == 1) "was" else "were"} deleted.")
+            }
             if (result.restored == 0) {
-                if (result.unchanged + result.keptNewer == 0) return "The backup has no notes in it."
-                return "Nothing to restore: every note in the backup is already here.$datesSetBack$keptNewer"
+                if (result.unchanged + result.keptNewer == 0) return "The backup has no notes in it.$replaced"
+                return "Nothing to restore: every note in the backup is already here.$datesSetBack$keptNewer$replaced"
             }
             val parts = buildList {
                 if (result.undeleted > 0) add("${result.undeleted} that had been deleted")
@@ -781,7 +813,7 @@ class NotesModel(
             }
             var text = "Restored ${notes(result.restored)}"
             text += if (parts.size == 1 && result.undeleted > 0) ", which had been deleted." else ": " + parts.joinToString(", ") + "."
-            return text + datesSetBack + keptNewer
+            return text + datesSetBack + keptNewer + replaced
         }
     }
 }

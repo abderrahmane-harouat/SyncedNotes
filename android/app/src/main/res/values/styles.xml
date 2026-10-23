@@ -1,5 +1,14 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- The screens' themes: dialogs and menus take their colours from these. Which one is the
+         app's choice (Appearance.kt), not only the phone's. -->
+    <style name="AppTheme" parent="@android:style/Theme.Material.Light.NoActionBar">
+        <item name="android:colorAccent">#FF007AFF</item>
+    </style>
+    <style name="AppThemeDark" parent="@android:style/Theme.Material.NoActionBar">
+        <item name="android:colorAccent">#FF0A84FF</item>
+    </style>
+
     <!-- A 30dp button with a 24dp icon drawn at its natural size, as in Samsung's panel. -->
     <style name="PanelButton">
         <item name="android:layout_width">30dp</item>

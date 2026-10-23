@@ -45,6 +45,10 @@ class Editor(scale: Float, dark: Boolean) : ComposerHost {
     var format: Composer.FormatState? by mutableStateOf(null)
         private set
     val focus = FocusRequester()
+    /** Whether Find in Note's bar is open, and what it looks for. */
+    var finding by mutableStateOf(false)
+    var findText by mutableStateOf("")
+    val findFocus = FocusRequester()
     val composer = Composer(AppFonts.family, EditorStyle.macLike(scale, dark), this).apply { placeholder = "Title" }
 
     override fun requestFrame() { frame++ }

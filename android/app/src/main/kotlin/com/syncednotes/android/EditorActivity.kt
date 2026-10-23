@@ -32,7 +32,7 @@ import syncednotes.note.v1.Note
  * One note, in the engine, with Samsung's toolbar under it. Saved as typing pauses and when
  * left, as on the Mac (NotesModel); a note left with nothing in it is removed rather than kept.
  */
-class EditorActivity : Activity() {
+class EditorActivity : ScreenActivity() {
     private lateinit var canvas: NoteCanvasView
     private lateinit var toolbar: View
     private lateinit var textOptions: TextOptionsPanel
@@ -42,6 +42,9 @@ class EditorActivity : Activity() {
     private val cards: List<CardPopup> get() = listOf(textOptions, fontColor, highlight)
 
     private lateinit var id: Id
+    private lateinit var findBar: View
+    private lateinit var findField: android.widget.EditText
+    private lateinit var findCount: TextView
     private var folder: Id? = null
     private var stored: Note = Note.getDefaultInstance()
     private var inTrash = false
@@ -85,6 +88,8 @@ class EditorActivity : Activity() {
         val composer = canvas.composer
         val topBar = topBar(composer.style.background)
         (findViewById<ViewGroup>(R.id.root)).addView(topBar, 0)
+        findBar = findBar(composer.style.background)
+        (findViewById<ViewGroup>(R.id.root)).addView(findBar, 1)
         // A note only shown (in the Trash, or more than the engine can edit) has no toolbar.
         if (!editable) findViewById<View>(R.id.toolbar).visibility = View.GONE
         load()
@@ -139,7 +144,7 @@ class EditorActivity : Activity() {
         @Suppress("DEPRECATION")
         window.statusBarColor = pageColor
         @Suppress("DEPRECATION")
-        window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
+        window.decorView.systemUiVisibility = if (isDark) 0 else View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR
         canvas.requestFocus()
         // A new note is for typing: the keyboard comes up with it.
         if (intent.getBooleanExtra(NEW, false)) canvas.post { canvas.showKeyboard() }
@@ -287,6 +292,8 @@ class EditorActivity : Activity() {
     private fun noteMenu(anchor: View) {
         val store = notes.store ?: return
         PopupMenu(this, anchor, Gravity.END).apply {
+            // A note in the Trash can still be searched: it is only read, never changed.
+            menu.add("Find in Note").setOnMenuItemClickListener { openFind(); true }
             if (inTrash) {
                 menu.add("Restore").setOnMenuItemClickListener {
                     store.restoreFromTrash(id)
@@ -303,6 +310,78 @@ class EditorActivity : Activity() {
                 }
             }
             show()
+        }
+    }
+
+    // --- Find in Note ---------------------------------------------------------------------------
+
+    /**
+     * A field over the note, how many matches there are, and arrows from one to the next. The
+     * matches are marked in the note itself, by the engine, as on the Mac.
+     */
+    private fun findBar(color: Int): View {
+        findField = privateField("Find in Note").apply {
+            imeOptions = imeOptions or android.view.inputmethod.EditorInfo.IME_ACTION_SEARCH
+            addTextChangedListener(object : android.text.TextWatcher {
+                override fun afterTextChanged(s: android.text.Editable) {
+                    canvas.composer.find(s.toString())
+                    showCount()
+                }
+                override fun beforeTextChanged(s: CharSequence, start: Int, count: Int, after: Int) {}
+                override fun onTextChanged(s: CharSequence, start: Int, before: Int, count: Int) {}
+            })
+            setOnEditorActionListener { _, _, _ -> canvas.composer.findNext(); showCount(); true }
+        }
+        findCount = label("", 14f, Palette.SECONDARY).apply { minWidth = dp(64); gravity = Gravity.CENTER }
+        fun arrow(icon: Int, description: String, forward: Boolean) = ImageButton(this).apply {
+            setImageResource(icon)
+            imageTintList = ColorStateList.valueOf(Palette.ACCENT)
+            background = pressable(radius = dp(20).toFloat())
+            contentDescription = description
+            layoutParams = LinearLayout.LayoutParams(dp(40), dp(40))
+            setOnClickListener {
+                canvas.composer.findNext(forward)
+                showCount()
+            }
+        }
+        return row(
+            findField.margins(width = 0, weight = 1f),
+            findCount,
+            arrow(R.drawable.ic_chevron_up, "Previous", false),
+            arrow(R.drawable.ic_chevron_down, "Next", true),
+            plainButton("Done") { closeFind() }.margins(width = ViewGroup.LayoutParams.WRAP_CONTENT),
+        ).apply {
+            setBackgroundColor(color)
+            setPadding(dp(12), dp(4), dp(6), dp(6))
+            visibility = View.GONE
+        }
+    }
+
+    private fun openFind() {
+        closeCards()
+        findBar.visibility = View.VISIBLE
+        findField.requestFocus()
+        // Asked once the menu that opened Find has closed and the window has its focus back;
+        // asked before that, the keyboard does not come.
+        findField.postDelayed({
+            findField.requestFocus()
+            getSystemService(android.view.inputmethod.InputMethodManager::class.java).showSoftInput(findField, 0)
+        }, 250)
+    }
+
+    private fun closeFind() {
+        findBar.visibility = View.GONE
+        findField.setText("")
+        canvas.composer.endFind(now())
+        getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(findField.windowToken, 0)
+    }
+
+    private fun showCount() {
+        val c = canvas.composer
+        findCount.text = when {
+            c.findQuery.isEmpty() -> ""
+            c.matchCount == 0 -> "None"
+            else -> "${c.currentMatch + 1} of ${c.matchCount}"
         }
     }
 

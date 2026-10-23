@@ -129,6 +129,34 @@ fun ChangePassphraseSheet(model: NotesModel) {
 }
 
 /**
+ * Whether a backup adds to the notes or replaces them. Adding is the safe choice and the
+ * default; replacing puts what the backup lacks in the Trash, where it can still be restored.
+ */
+@Composable
+fun ImportChoiceSheet(model: NotesModel) {
+    val c = colors
+    Sheet(width = 420.dp) {
+        Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            BasicText("Import Backup", style = MacType.title.copy(color = c.text))
+            BasicText(
+                "Add the backup's notes to the ones here: nothing here is lost, and a note changed since the backup keeps its newer version.",
+                style = MacType.body.copy(color = c.secondaryText),
+            )
+            BasicText(
+                "Or replace the notes here with the backup's: notes it does not have go to the Trash, where they stay 30 days, and folders it does not have are deleted. Your paired phone does the same.",
+                style = MacType.body.copy(color = c.secondaryText),
+            )
+            Spacer(Modifier.height(4.dp))
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End)) {
+                MacButton("Cancel", { model.importToChoose = null })
+                MacButton("Replace", { model.chooseImport(replace = true) }, destructive = true)
+                MacButton("Add", { model.chooseImport(replace = false) }, primary = true)
+            }
+        }
+    }
+}
+
+/**
  * Asks for the passphrase of the vault a backup came from, when it is not this one's: a backup
  * made before the passphrase was changed.
  */

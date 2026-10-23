@@ -3,7 +3,6 @@ package com.syncednotes.android
 import android.app.Activity
 import android.app.AlertDialog
 import android.os.Bundle
-import android.text.format.DateUtils
 import android.view.Gravity
 import android.view.View
 import android.widget.LinearLayout
@@ -27,7 +26,7 @@ import kotlinx.coroutines.launch
  * Pairing with the Mac, and how sync stands once paired (Docs/Sync.md). Pairing ends with the
  * Mac's passphrase whenever the phone's notes are not yet in the Mac's vault.
  */
-class SyncActivity : Activity() {
+class SyncActivity : ScreenActivity() {
     private val scope = MainScope()
     private lateinit var page: LinearLayout
     /** Set while the Mac's passphrase is asked for: the screen then stays put. */
@@ -127,7 +126,7 @@ class SyncActivity : Activity() {
         for (peer in peers) {
             val state = when (val s = states[peer.deviceId]) {
                 is PeerState.Connected -> s.lastSynced?.let {
-                    "Connected. Last in sync " + DateUtils.getRelativeTimeSpanString(it.toEpochMilli(), System.currentTimeMillis(), DateUtils.SECOND_IN_MILLIS) + "."
+                    "Connected. In sync ${sinceInWords(it)}."
                 } ?: "Connected."
                 is PeerState.Failed -> s.message
                 else -> "Looking for it on this network…"

@@ -17,7 +17,7 @@ import kotlin.concurrent.thread
  * The first screen: on a new phone, pairing with the Mac or starting on the phone alone; after
  * that, the passphrase. The notes open only from here.
  */
-class LockActivity : Activity() {
+class LockActivity : ScreenActivity() {
     private lateinit var problem: TextView
 
     override fun onCreate(savedInstanceState: Bundle?) {

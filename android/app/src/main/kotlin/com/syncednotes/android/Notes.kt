@@ -8,6 +8,7 @@ import android.os.Handler
 import android.os.Looper
 import android.provider.Settings
 import com.syncednotes.core.Id
+import com.syncednotes.core.LockException
 import com.syncednotes.core.NoteStore
 import com.syncednotes.core.PassphraseChange
 import com.syncednotes.core.SqlOpener
@@ -93,13 +94,19 @@ class Notes(private val app: Application) {
         changed()
     }
 
-    fun lock() {
+    fun lock() = close(tell = true)
+
+    /**
+     * Closes the notes. Untold, for closing them only to swap the folder under them and open
+     * them again at once: the screens would otherwise go to the lock screen in between.
+     */
+    private fun close(tell: Boolean) {
         val opened = store ?: return
         sync.detach()
         watching?.cancel()
         store = null
         runCatching { opened.close() }
-        changed()
+        if (tell) changed()
     }
 
     // --- Joining the Mac's vault -------------------------------------------------------------
@@ -134,7 +141,7 @@ class Notes(private val app: Application) {
                 opened.saveSyncIdentity(identity)
                 peer?.let(opened::savePeer)
                 PassphraseChange.prepareJoining(opened, home, vault, passphrase)
-                lock()
+                close(tell = false)
                 PassphraseChange.swap(home)
                 open(vault)
                 return
@@ -145,6 +152,27 @@ class Notes(private val app: Application) {
         peer?.let(opened::savePeer)
         // Sync starts now that there is a peer to sync with.
         sync.attach(opened)
+    }
+
+    /**
+     * Changes the passphrase of a phone that is not paired, as on the Mac: the notes are
+     * locked again beside the old ones, checked, then swapped in. A paired phone holds the
+     * Mac's vault, whose passphrase is changed on the Mac. Slow: off the main thread. Throws a
+     * [LockException] for a wrong [current] passphrase, and changes nothing then.
+     */
+    fun changePassphrase(current: String, new: String) {
+        val opened = store ?: throw IllegalStateException("Unlock the notes first.")
+        check(sync.peers.value.isEmpty()) { "Change the passphrase on your Mac; this phone follows it." }
+        val vault = PassphraseChange.prepare(opened, home, current, new)
+        close(tell = false)
+        try {
+            PassphraseChange.swap(home)
+        } catch (e: Exception) {
+            // Settle on whichever notes are in place now: the change finished, or did not.
+            runCatching { PassphraseChange.finishInterruptedChange(home) }
+        }
+        open(runCatching { unlockVault(home, new) }.getOrElse { unlockVault(home, current) })
+        if (!vault.header.id.contentEquals(store!!.vault.header.id)) throw IllegalStateException("The passphrase was not changed; your notes are as they were.")
     }
 
     fun deviceName(): String =

@@ -38,6 +38,10 @@ object Backup {
         var pictures: Int = 0,
         /** Folders this store did not have. */
         var folders: Int = 0,
+        /** Replacing: notes here that the backup does not have, moved to the Trash. */
+        var trashed: Int = 0,
+        /** Replacing: folders here that the backup does not have, deleted. */
+        var foldersDeleted: Int = 0,
     ) {
         val restored: Int get() = added + undeleted + updated
     }
@@ -108,8 +112,9 @@ object Backup {
      * uses: the other device's record of a deletion is newer than the backup, and without it
      * would delete the note again.
      */
-    fun restore(backup: StoredBackup, store: NoteStore, now: Instant = Instant.now()): Result {
+    fun restore(backup: StoredBackup, store: NoteStore, now: Instant = Instant.now(), replace: Boolean = false): Result {
         val result = Result()
+        if (replace) clearAway(backup, store, now, result)
         // Parents come before the folders inside them, so each finds its parent here.
         for (folder in backup.foldersList) {
             val parent = folder.parent.takeIf { !it.isEmpty }
@@ -153,6 +158,30 @@ object Backup {
             store.setFolder(entry.id, entry.folder.takeIf { !it.isEmpty })
         }
         return result
+    }
+
+    /**
+     * Replacing the notes with a backup's: every note here the backup does not have goes to the
+     * Trash, from where it can still be restored for 30 days, rather than being deleted; and
+     * every folder it does not have is deleted. Both are changes like any other, so the paired
+     * phone makes them too.
+     */
+    private fun clearAway(backup: StoredBackup, store: NoteStore, now: Instant, result: Result) {
+        val keptNotes = backup.notesList.map { it.id }.toSet()
+        for (note in store.summaries()) {
+            if (note.id !in keptNotes) {
+                store.moveToTrash(note.id, now)
+                result.trashed++
+            }
+        }
+        val keptFolders = backup.foldersList.map { it.id }.toSet()
+        // Deepest first, so deleting a folder never takes one the backup keeps inside it.
+        for (folder in store.folders().reversed()) {
+            if (folder.id !in keptFolders && store.folderExists(folder.id)) {
+                store.deleteFolder(folder.id, now)
+                result.foldersDeleted++
+            }
+        }
     }
 
     private fun instant(seconds: Double): Instant {

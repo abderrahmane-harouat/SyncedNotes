@@ -75,6 +75,9 @@ private fun tryPassphrase(): String? = System.getProperty("syncednotes.tryPassph
 private fun trySyncPort(): Int? = System.getProperty("syncednotes.trySyncPort")?.toIntOrNull()?.takeIf { folderName() != REAL_FOLDER }
 private fun tryPairing(): Boolean = System.getProperty("syncednotes.tryPairing") == "true" && folderName() != REAL_FOLDER
 
+/** A word for Find in Note to look for in the first note at launch, to look at its markers; made-up notes only. */
+private fun tryFind(): String? = System.getProperty("syncednotes.tryFind")?.takeIf { folderName() != REAL_FOLDER }
+
 /** Text to type into a new note at launch, through the window's own events (SelfTest). */
 private fun selfTestText(): String? = System.getProperty("syncednotes.selfTest")?.takeIf { folderName() != REAL_FOLDER }
 
@@ -131,6 +134,11 @@ fun main() {
             LaunchedEffect(Unit) {
                 KeepOnThisMac.install(allowCapture())
                 tryPassphrase()?.let { model.unlock(it) }
+                tryFind()?.let {
+                    delay(800)
+                    editor.findText = it
+                    editor.finding = true
+                }
                 if (tryPairing()) model.sync?.let { sync ->
                     model.pairingPhone = true
                     launch {
@@ -211,6 +219,13 @@ private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor, layout: Wi
                 enabled = unlocked,
                 onClick = layout::toggleSidebar,
             )
+            Separator()
+            Item("Find in Note…", shortcut = KeyShortcut(Key.F, meta = true), enabled = model.document != null, onClick = {
+                editor.finding = true
+                editor.findFocus.requestFocus()
+            })
+            Item("Find Next", shortcut = KeyShortcut(Key.G, meta = true), enabled = editor.finding, onClick = { editor.composer.findNext() })
+            Item("Find Previous", shortcut = KeyShortcut(Key.G, meta = true, shift = true), enabled = editor.finding, onClick = { editor.composer.findNext(forward = false) })
             Separator()
             Menu("Appearance") {
                 for (choice in Appearance.entries) {

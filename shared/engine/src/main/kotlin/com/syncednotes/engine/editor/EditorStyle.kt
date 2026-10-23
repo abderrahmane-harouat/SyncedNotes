@@ -47,6 +47,15 @@ data class EditorStyle(
     val codeCornerRadius: Float = 0f,
     val dividerColor: Int = 0x33000000,
     val dividerThickness: Float = 1f,
+    /**
+     * Behind every match of Find in Note, and behind the one Find is on: a marker's yellow and
+     * orange, solid, edged with [findEdgeColor]. Every hue is also a highlight a note can have;
+     * the edge, which no highlight has, is what tells a match from one.
+     */
+    val findColor: Int = 0xFFFFE45C.toInt(),
+    val findCurrentColor: Int = 0xFFFF9F0A.toInt(),
+    val findEdgeColor: Int = 0x66000000,
+    val findEdge: Float = 1f,
 ) {
     /** The default text size in pixels. */
     val textSize: Float get() = defaultSize * sizeUnit
@@ -60,7 +69,7 @@ data class EditorStyle(
          * text in 1/360 of the page width, which on a phone is the screen width in portrait;
          * using the shorter side keeps text the same size when the phone turns.
          */
-        fun samsungLike(density: Float, shortSidePx: Int): EditorStyle {
+        fun samsungLike(density: Float, shortSidePx: Int, dark: Boolean = false): EditorStyle {
             val unit = shortSidePx / 360f
             return EditorStyle(
                 sizeUnit = unit,
@@ -72,12 +81,13 @@ data class EditorStyle(
                 paddingRight = 18f * density,
                 paddingTop = 16f * density,
                 paddingBottom = 120f * density,
-                background = 0xFFFCFCFC.toInt(),
+                // Dark is the Mac's dark page, so the two apps look alike at night too.
+                background = if (dark) 0xFF1E1E1E.toInt() else 0xFFFCFCFC.toInt(),
                 // Samsung's default text colour (composer_light_font_color).
-                textColor = 0xFF252525.toInt(),
+                textColor = if (dark) 0xFFF5F5F7.toInt() else 0xFF252525.toInt(),
                 caretColor = 0xFF3E91F7.toInt(),
                 caretWidth = 2f * density,
-                selectionColor = 0xFFC6E3F7.toInt(),
+                selectionColor = if (dark) 0xFF3F638B.toInt() else 0xFFC6E3F7.toInt(),
                 handleColor = 0xFF3E91F7.toInt(),
                 handleRadius = 8f * density,
                 handleTouchRadius = 24f * density,
@@ -93,14 +103,21 @@ data class EditorStyle(
                 checkboxSize = 15f * density,
                 checkboxRadius = 2.5f * density,
                 checkboxStroke = 1.5f * density,
-                checkboxColor = 0xFF252525.toInt(),
+                checkboxColor = if (dark) 0xFFF5F5F7.toInt() else 0xFF252525.toInt(),
                 // Ticked items are struck through and faded to 40% (102/255).
                 checkedTextAlpha = 0.4f,
                 quoteIndent = 20f * density,
                 codeIndent = 12f * density,
                 quoteBarWidth = 3f * density,
+                quoteBarColor = if (dark) 0x40FFFFFF else 0x33000000,
+                codeBackground = if (dark) 0x14FFFFFF else 0x0F000000,
                 codeCornerRadius = 6f * density,
+                dividerColor = if (dark) 0x33FFFFFF else 0x33000000,
                 dividerThickness = 1f * density,
+                findColor = if (dark) 0x66FFD60A else 0xFFFFE45C.toInt(),
+                findCurrentColor = if (dark) 0xCCFF9F0A.toInt() else 0xFFFF9F0A.toInt(),
+                findEdgeColor = if (dark) 0x99FFFFFF.toInt() else 0x66000000,
+                findEdge = 1f * density,
             )
         }
 
@@ -151,6 +168,11 @@ data class EditorStyle(
             codeCornerRadius = 6f * scale,
             dividerColor = if (dark) 0x33FFFFFF else 0x26000000,
             dividerThickness = 1f * scale,
+            // On a dark page the marker is see-through, so light text stays readable on it.
+            findColor = if (dark) 0x66FFD60A else 0xFFFFE45C.toInt(),
+            findCurrentColor = if (dark) 0xCCFF9F0A.toInt() else 0xFFFF9F0A.toInt(),
+            findEdgeColor = if (dark) 0x99FFFFFF.toInt() else 0x66000000,
+            findEdge = 1f * scale,
         )
     }
 }

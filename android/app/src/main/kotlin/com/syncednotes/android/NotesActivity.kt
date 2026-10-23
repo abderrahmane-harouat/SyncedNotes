@@ -6,7 +6,6 @@ import android.content.Intent
 import android.os.Bundle
 import android.text.Editable
 import android.text.TextWatcher
-import android.text.format.DateUtils
 import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
@@ -30,7 +29,7 @@ import kotlinx.coroutines.launch
  * The notes: All Notes, a folder, or the Trash, newest first, with search, as the Mac's list.
  * The places themselves (the Mac's sidebar) are a sheet from the folder button.
  */
-class NotesActivity : Activity() {
+class NotesActivity : ScreenActivity() {
     sealed interface Place {
         data object AllNotes : Place
         data class InFolder(val id: Id, val name: String) : Place
@@ -241,7 +240,7 @@ class NotesActivity : Activity() {
                         number,
                     ).apply {
                         setPadding(dp(20) + dp(20) * indent, dp(13), dp(20), dp(13))
-                        if (p == place) setBackgroundColor(0x14000000)
+                        if (p == place) setBackgroundColor(Palette.SELECTED)
                     }
                 }
             }
@@ -276,6 +275,11 @@ class NotesActivity : Activity() {
                 nameFolder("New Folder", "") { store.createFolder(it, folder.id) }
                 true
             }
+            menu.add("Move to…").setOnMenuItemClickListener {
+                done()
+                moveFolder(folder)
+                true
+            }
             menu.add("Delete…").setOnMenuItemClickListener {
                 done()
                 val count = store.noteCountDeletingFolder(folder.id)
@@ -284,6 +288,80 @@ class NotesActivity : Activity() {
                 true
             }
             show()
+        }
+    }
+
+    /** Where a folder can go: the top, or any folder that is not it or inside it. */
+    private fun moveFolder(folder: Place.InFolder) {
+        val store = notes.store ?: return
+        val folders = store.folders()
+        val depths = depths(folders)
+        val inside = mutableSetOf(folder.id)
+        for (f in folders) if (f.parent in inside) inside += f.id
+        val choices = folders.filter { it.id !in inside }
+        val names = listOf("Top Level") + choices.map { "    ".repeat(depths.getValue(it.id)) + it.name }
+        AlertDialog.Builder(this)
+            .setTitle("Move “${folder.name}” to")
+            .setItems(names.toTypedArray()) { _, which ->
+                runCatching { store.moveFolder(folder.id, if (which == 0) null else choices[which - 1].id) }
+                    .onFailure { android.widget.Toast.makeText(this, "The folder could not be moved: ${it.message}", android.widget.Toast.LENGTH_LONG).show() }
+            }
+            .show()
+    }
+
+    private fun chooseAppearance() {
+        val choices = Appearance.entries
+        val current = choices.indexOf(Appearance.load(this))
+        AlertDialog.Builder(this)
+            .setTitle("Appearance")
+            .setSingleChoiceItems(choices.map { it.title }.toTypedArray(), current) { dialog, which ->
+                Appearance.save(this, choices[which])
+                dialog.dismiss()
+                recreate()
+            }
+            .show()
+    }
+
+    /** The passphrase of a phone used on its own; a paired phone follows the Mac's. */
+    private fun changePassphrase() {
+        val current = privateField("Current passphrase", secret = true)
+        val new = privateField("New passphrase", secret = true)
+        val again = privateField("New passphrase again", secret = true)
+        val box = column(current.margins(bottom = dp(8)), new.margins(bottom = dp(8)), again).apply { setPadding(dp(20), dp(8), dp(20), 0) }
+        val dialog = AlertDialog.Builder(this)
+            .setTitle("Change Passphrase")
+            .setMessage("Every note is locked again with the new passphrase. The old one will no longer open anything on this phone.")
+            .setView(box)
+            .setPositiveButton("Change", null)
+            .setNegativeButton("Cancel", null)
+            .show()
+        val change = dialog.getButton(AlertDialog.BUTTON_POSITIVE)
+        change.setOnClickListener {
+            val chosen = new.text.toString()
+            when {
+                chosen.length < 8 -> again.error = "Use at least 8 characters."
+                chosen != again.text.toString() -> again.error = "The two new passphrases differ."
+                else -> {
+                    change.isEnabled = false
+                    dialog.setMessage("Locking every note again…")
+                    kotlin.concurrent.thread {
+                        val failure = runCatching { notes.changePassphrase(current.text.toString(), chosen) }.exceptionOrNull()
+                        runOnUiThread {
+                            change.isEnabled = true
+                            when (failure) {
+                                null -> {
+                                    dialog.dismiss()
+                                    android.widget.Toast.makeText(this, "Passphrase changed.", android.widget.Toast.LENGTH_LONG).show()
+                                }
+                                is com.syncednotes.core.LockException -> {
+                                    dialog.setMessage("That is not your current passphrase.")
+                                }
+                                else -> dialog.setMessage(failure.message ?: "The passphrase was not changed.")
+                            }
+                        }
+                    }
+                }
+            }
         }
     }
 
@@ -319,6 +397,8 @@ class NotesActivity : Activity() {
                     true
                 }
             }
+            menu.add("Appearance…").setOnMenuItemClickListener { chooseAppearance(); true }
+            if (!paired) menu.add("Change Passphrase…").setOnMenuItemClickListener { changePassphrase(); true }
             menu.add("Lock").setOnMenuItemClickListener { notes.lock(); true }
             show()
         }
@@ -357,7 +437,7 @@ class NotesActivity : Activity() {
             val title = label(note.title.ifEmpty { "New Note" }, 17f, if (note.title.isEmpty()) Palette.SECONDARY else Palette.TEXT, bold = true)
                 .apply { maxLines = 1; ellipsize = android.text.TextUtils.TruncateAt.END }
             val date = note.trashed ?: note.updated
-            var detail = DateUtils.getRelativeTimeSpanString(date.toEpochMilli(), System.currentTimeMillis(), DateUtils.MINUTE_IN_MILLIS).toString()
+            var detail = listDate(date)
             if (place == Place.AllNotes) note.folder?.let(folderNames::get)?.let { detail += "  ·  $it" }
             val sub = label(detail, 14f, Palette.SECONDARY).apply { maxLines = 1 }
             return column(title, sub).apply {

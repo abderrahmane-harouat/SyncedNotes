@@ -34,7 +34,15 @@ import kotlin.math.sqrt
  * long-press, flings, undo grouping) is reproducible in tests.
  */
 class Composer(fonts: FontFamily, val style: EditorStyle, private val host: ComposerHost) {
-    val document = TextDocument()
+    val document = TextDocument().apply {
+        // Find's markers follow the text as it is typed or arrives from the other device.
+        addListener {
+            if (findQuery.isNotEmpty()) {
+                findMatches()
+                currentMatch = if (matchCount == 0) -1 else currentMatch.coerceIn(0, matchCount - 1)
+            }
+        }
+    }
     private val layout = DocumentLayout(
         document, fonts, style.sizeUnit, style.defaultSize, style.lineSpacing, style.indentWidth, style.listMarkerWidth,
         style.quoteIndent, style.codeIndent,
@@ -1157,6 +1165,80 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         host.requestFrame()
     }
 
+    // --- Finding ---------------------------------------------------------------------------
+
+    /** What Find in Note looks for; empty when it is closed. */
+    var findQuery = ""
+        private set
+    /** Every match, as start and end offsets in turn, in order. Drawn behind the text, never part of it. */
+    private var matches = IntArray(0)
+    /** Which match Find is on, counting from 0; -1 when there is none. */
+    var currentMatch = -1
+        private set
+    val matchCount: Int get() = matches.size / 2
+
+    /**
+     * Marks every match of [query] in the note, case and accents aside, and goes to the first
+     * one at or after the caret. Returns how many there are. Nothing in the note changes, so
+     * nothing is saved and nothing can be undone.
+     */
+    fun find(query: String): Int {
+        findQuery = query
+        findMatches()
+        currentMatch = when {
+            matchCount == 0 -> -1
+            else -> (0 until matchCount).firstOrNull { matches[2 * it] >= selection.start } ?: 0
+        }
+        revealMatch()
+        host.requestFrame()
+        return matchCount
+    }
+
+    /** Goes to the next match, or the previous, round from the end to the start. */
+    fun findNext(forward: Boolean = true) {
+        if (matchCount == 0) return
+        currentMatch = ((if (currentMatch < 0) 0 else currentMatch + if (forward) 1 else -1) + matchCount) % matchCount
+        revealMatch()
+        host.requestFrame()
+    }
+
+    /** Closes Find: the markers go. The caret is left on the match Find was on, to carry on from there. */
+    fun endFind(now: Long) {
+        if (currentMatch >= 0) select(Selection(matches[2 * currentMatch], matches[2 * currentMatch + 1]), now)
+        findQuery = ""
+        matches = IntArray(0)
+        currentMatch = -1
+        host.requestFrame()
+    }
+
+    private fun findMatches() {
+        val needle = fold(findQuery)
+        if (needle.isEmpty()) {
+            matches = IntArray(0)
+            return
+        }
+        val hay = fold(document.text)
+        val found = ArrayList<Int>()
+        var at = hay.indexOf(needle)
+        while (at >= 0) {
+            found += at
+            found += at + needle.length
+            at = hay.indexOf(needle, at + needle.length)
+        }
+        matches = found.toIntArray()
+    }
+
+    /** The match Find is on, scrolled into the middle of the view if it is not on screen. */
+    private fun revealMatch() {
+        if (currentMatch < 0 || viewHeight == 0) return
+        val r = layout.caretRect(matches[2 * currentMatch], false)
+        val top = originY + r.top
+        val bottom = originY + r.bottom
+        if (top < insetTop || bottom > viewHeight - insetBottom) {
+            scrollTo(scrollY + top - insetTop - (viewHeight - insetTop - insetBottom) / 3f)
+        }
+    }
+
     // --- Painting -------------------------------------------------------------------------
 
     private var glyphIds = IntArray(256)
@@ -1196,6 +1278,33 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         }
     }
 
+    /** Find's markers on one line: the line's full height, as a highlighter would draw. */
+    private fun drawMatches(list: DrawList, pl: ParagraphLayout, line: Int, base: Int, ls: Int, le: Int, lineTop: Float, lineHeight: Float) {
+        if (matches.isEmpty()) return
+        // The first match that could end on this line, found by halving rather than walking.
+        var lo = 0
+        var hi = matchCount
+        while (lo < hi) {
+            val mid = (lo + hi) / 2
+            if (matches[2 * mid + 1] <= base + ls) lo = mid + 1 else hi = mid
+        }
+        var m = lo
+        while (m < matchCount && matches[2 * m] < base + le) {
+            val spans = pl.spans(line, maxOf(matches[2 * m] - base, ls), minOf(matches[2 * m + 1] - base, le))
+            val color = if (m == currentMatch) style.findCurrentColor else style.findColor
+            val edge = style.findEdge
+            var k = 0
+            while (k < spans.size) {
+                val x = originX + spans[k]
+                val w = spans[k + 1] - spans[k]
+                list.rect(x, lineTop, w, lineHeight, style.findEdgeColor)
+                list.rect(x + edge, lineTop + edge, w - 2 * edge, lineHeight - 2 * edge, color)
+                k += 2
+            }
+            m++
+        }
+    }
+
     private fun renderParagraph(list: DrawList, p: Int, pl: ParagraphLayout, top: Float) {
         val sel = selection
         val base = document.paragraphStart(p)
@@ -1226,6 +1335,8 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             forEachRun(pl, line) { r, x0, x1 ->
                 if (runs.highlights[r] != 0) list.rect(x0, lineTop, x1 - x0, lineHeight, runs.highlights[r])
             }
+
+            drawMatches(list, pl, line, base, ls, le, lineTop, lineHeight)
 
             if (!sel.isCollapsed) {
                 val s = sel.start - base
@@ -1674,4 +1785,23 @@ internal class VelocityTracker {
         const val SIZE = 20
         const val WINDOW_MS = 100L
     }
+}
+
+/**
+ * Text as Find compares it: lower case, and a letter with an accent as the letter without, so
+ * "cafe" finds "Café". One character for one, so an offset found in the folded text is the
+ * same offset in the note.
+ */
+internal fun fold(text: CharSequence): String {
+    val out = CharArray(text.length)
+    for (i in text.indices) {
+        val c = text[i]
+        val lower = Character.toLowerCase(c)
+        // Below U+00C0 nothing has an accent to take off.
+        out[i] = if (lower.code < 0xC0) lower else {
+            val parts = java.text.Normalizer.normalize(lower.toString(), java.text.Normalizer.Form.NFD)
+            if (parts.length > 1 && Character.getType(parts[1]) == Character.NON_SPACING_MARK.toInt()) parts[0] else lower
+        }
+    }
+    return String(out)
 }

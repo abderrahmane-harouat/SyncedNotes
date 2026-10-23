@@ -24,18 +24,24 @@ import android.widget.TextView
 // look like one.
 
 object Palette {
-    const val WINDOW = 0xFFFFFFFF.toInt()
-    const val SIDEBAR = 0xFFEFEFF1.toInt()
-    const val SEPARATOR = 0x1A000000
-    const val TEXT = 0xFF1D1D1F.toInt()
-    const val SECONDARY = 0xFF86868B.toInt()
-    const val TERTIARY = 0xFFB0B0B5.toInt()
-    const val ACCENT = 0xFF007AFF.toInt()
-    const val FIELD = 0xFFF2F2F4.toInt()
-    const val CONTROL = 0x0D000000
-    const val PRESSED = 0x1F000000
-    const val DANGER = 0xFFFF3B30.toInt()
-    const val CARD = 0xFFF5F5F7.toInt()
+    /** Set by each screen as it is made, from the appearance it was made in. */
+    @Volatile var dark = false
+
+    private fun pick(light: Int, night: Int) = if (dark) night else light
+
+    val WINDOW get() = pick(0xFFFFFFFF.toInt(), 0xFF1E1E1E.toInt())
+    val SIDEBAR get() = pick(0xFFEFEFF1.toInt(), 0xFF2A2A2C.toInt())
+    val SEPARATOR get() = pick(0x1A000000, 0x33FFFFFF)
+    val TEXT get() = pick(0xFF1D1D1F.toInt(), 0xFFF5F5F7.toInt())
+    val SECONDARY get() = pick(0xFF86868B.toInt(), 0xFF98989D.toInt())
+    val TERTIARY get() = pick(0xFFB0B0B5.toInt(), 0xFF636366.toInt())
+    val ACCENT get() = pick(0xFF007AFF.toInt(), 0xFF0A84FF.toInt())
+    val FIELD get() = pick(0xFFF2F2F4.toInt(), 0xFF2C2C2E.toInt())
+    val CONTROL get() = pick(0x0D000000, 0x14FFFFFF)
+    val PRESSED get() = pick(0x1F000000, 0x29FFFFFF)
+    val SELECTED get() = pick(0x14000000, 0x1FFFFFFF)
+    val DANGER get() = pick(0xFFFF3B30.toInt(), 0xFFFF453A.toInt())
+    val CARD get() = pick(0xFFF5F5F7.toInt(), 0xFF2C2C2E.toInt())
 }
 
 fun Context.dp(value: Float): Int = TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, value, resources.displayMetrics).toInt()
@@ -155,11 +161,21 @@ fun Activity.showScreen(content: View, background: Int = Palette.WINDOW) {
     @Suppress("DEPRECATION")
     window.navigationBarColor = background
     @Suppress("DEPRECATION")
-    window.decorView.systemUiVisibility = View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
+    window.decorView.systemUiVisibility =
+        if (Palette.dark) 0 else View.SYSTEM_UI_FLAG_LIGHT_STATUS_BAR or View.SYSTEM_UI_FLAG_LIGHT_NAVIGATION_BAR
 }
 
-/** No autofill service or content capture reads anything in this window (Privacy.md). */
+/**
+ * No autofill service or content capture reads anything in this window, and neither
+ * screenshots nor Recent apps show it (Privacy.md). A debug build may allow screenshots when
+ * `files/allow-capture` exists, which only `adb` can write, to check the app's look on
+ * made-up notes, as the Mac's try-out runs do.
+ */
 fun Activity.keepToThisPhone() {
+    val debuggable = (applicationInfo.flags and android.content.pm.ApplicationInfo.FLAG_DEBUGGABLE) != 0
+    if (!(debuggable && java.io.File(filesDir, "allow-capture").exists())) {
+        window.addFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+    }
     window.decorView.importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO_EXCLUDE_DESCENDANTS
     if (Build.VERSION.SDK_INT >= 30) {
         window.decorView.importantForContentCapture = View.IMPORTANT_FOR_CONTENT_CAPTURE_NO_EXCLUDE_DESCENDANTS

@@ -215,4 +215,27 @@ class NotesModelTest {
         assertEquals(listOf("made-up.snbackup"), folder.list()!!.toList())
         assertTrue(model.notice!!.startsWith("Backed up 1 note"))
     }
+
+    @Test
+    fun importingABackupAsksFirstAndReplacingPutsWhatItLacksInTheTrash() {
+        val model = unlocked()
+        model.newNote()
+        composer.type("Kept in the backup", 0)
+        model.saveNow()
+        val backup = Files.createTempFile("syncednotes-model-", ".snbackup").toFile()
+        model.exportBackup(backup)
+        model.newNote()
+        composer.type("Written after", 10)
+        model.saveNow()
+
+        model.importBackup(backup)
+        // Nothing happens until the choice is made.
+        assertEquals(2, model.summaries.size)
+        model.chooseImport(replace = true)
+        assertEquals(listOf("Kept in the backup"), model.summaries.map { it.title })
+        assertEquals(1, model.trashCount)
+        assertNull(model.importToChoose)
+        backup.delete()
+        model.lock()
+    }
 }

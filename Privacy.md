@@ -144,6 +144,9 @@ keyboard learning sees a note), the same lock and store as the Mac, and the same
 - **Never backed up off the phone**: `allowBackup` is off, and the data extraction rules keep
   everything out of Google's cloud backup and out of the transfer to a new phone.
 - **The notes lock** after five minutes away from the app, and from the menu.
+- **Screenshots and Recent apps show nothing** (`FLAG_SECURE`), as the Mac keeps its windows
+  out of screenshots. A debug build allows screenshots only when a file only `adb` can write
+  is there, to check the app's look on made-up notes.
 - **The few text fields** (passphrase, search, folder names) tell the keyboard not to learn or
   suggest (`IME_FLAG_NO_PERSONALIZED_LEARNING`; Gboard and Samsung Keyboard then show their
   incognito mark), and every window is closed to autofill services and to content capture,
@@ -154,9 +157,6 @@ keyboard learning sees a note), the same lock and store as the Mac, and the same
 
 ## Open issues
 
-- **Recent apps** on the phone shows a picture of the last screen. `FLAG_SECURE` would hide it,
-  and screenshots with it; not set yet.
-- **The phone's dark theme** is not done: the app is light whatever the system's setting.
 
 - **⌃⌘D (Look Up) and other system shortcuts** were not tried by hand in the new app.
 - **The dictation key** still reaches macOS's own Dictation, which the app cannot refuse:

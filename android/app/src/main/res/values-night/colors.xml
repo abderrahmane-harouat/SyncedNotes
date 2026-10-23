@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The toolbar and its panels at night, in the Mac's dark colours. -->
+<resources>
+    <color name="note_background">#FF1E1E1E</color>
+    <color name="panel_background">#FF2A2A2C</color>
+    <color name="panel_group">#FF3A3A3C</color>
+    <color name="panel_title">#FFF5F5F7</color>
+    <color name="toolbar_stroke">#FF3A3A3C</color>
+    <color name="icon_tint">#FFD0D0D5</color>
+    <color name="item_selected">#29FFFFFF</color>
+    <color name="item_pressed">#33FFFFFF</color>
+    <color name="size_label">#FFD0D0D5</color>
+    <color name="list_text">#FFF5F5F7</color>
+</resources>

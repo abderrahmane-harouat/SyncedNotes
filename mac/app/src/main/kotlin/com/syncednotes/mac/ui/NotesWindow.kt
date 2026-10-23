@@ -14,6 +14,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.syncednotes.core.Id
+import com.syncednotes.mac.Appearance
 import com.syncednotes.mac.Editor
 import com.syncednotes.mac.NotesModel
 
@@ -26,14 +27,24 @@ sealed interface Question {
 
 /** The lock screen until the notes are unlocked, then the notes in three columns, as in Apple Notes. */
 @Composable
-fun NotesWindow(model: NotesModel, editor: Editor, onExport: () -> Unit, onImport: () -> Unit) {
+fun NotesWindow(
+    model: NotesModel,
+    editor: Editor,
+    appearance: Appearance,
+    onAppearance: (Appearance) -> Unit,
+    onExport: () -> Unit,
+    onImport: () -> Unit,
+) {
     val c = colors
     var question by remember { mutableStateOf<Question?>(null) }
     Box(Modifier.fillMaxSize().background(c.window)) {
         when (val phase = model.phase) {
             is NotesModel.Phase.Locked -> LockScreen(model, phase.firstRun)
             NotesModel.Phase.Unlocked -> Row(Modifier.fillMaxSize()) {
-                Sidebar(model, onDeleteFolder = { question = Question.DeleteFolder(it) }, onExport = onExport, onImport = onImport, modifier = Modifier.width(214.dp))
+                Sidebar(
+                    model, onDeleteFolder = { question = Question.DeleteFolder(it) }, onExport = onExport, onImport = onImport,
+                    appearance = appearance, onAppearance = onAppearance, modifier = Modifier.width(214.dp),
+                )
                 Divider()
                 NoteList(
                     model,

@@ -57,6 +57,7 @@ object Icons {
     ))
     val numbers = icon("list.number", "M10 6.5h9.5", "M10 12h9.5", "M10 17.5h9.5", "M4.5 5l1.5-1v5", "M4.2 11.2a1.4 1.4 0 0 1 2.6 0.6c0 1-2.6 2-2.6 3.2h2.8", "M4.3 16.6h2.4l-1.2 1.5a1.3 1.3 0 1 1-1.3 1.6")
     val checklist = icon("checklist", "M10.5 7h9", "M10.5 17h9", "M7.5 7a2.5 2.5 0 1 1-5 0a2.5 2.5 0 1 1 5 0z", "M3.6 16.8l1.3 1.3 2.6-2.8")
+    val appearance = icon("circle.lefthalf.filled", "M20.5 12a8.5 8.5 0 1 1-17 0a8.5 8.5 0 1 1 17 0z", filled = listOf("M12 3.5a8.5 8.5 0 0 0 0 17z"))
     val highlighter = icon("highlighter", "M14.5 4.5l5 5-8 8-5-5z", "M6.5 12.5l-2 4.5 2.5 2.5 4.5-2", "M3.5 20.5h6")
 }
 

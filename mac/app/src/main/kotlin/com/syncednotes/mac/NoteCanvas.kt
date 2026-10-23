@@ -17,7 +17,6 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.drawscope.drawIntoCanvas
 import androidx.compose.ui.graphics.nativeCanvas
-import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.pointer.PointerEventType
 import androidx.compose.ui.input.pointer.PointerIcon
 import androidx.compose.ui.input.pointer.isShiftPressed
@@ -87,7 +86,6 @@ fun NoteCanvas(editor: Editor, modifier: Modifier = Modifier) {
             .focusRequester(editor.focus)
             .onFocusChanged { composer.setFocused(it.isFocused, now()) }
             .focusable()
-            .onKeyEvent { MacKeys.handle(composer, it) }
             .pointerInput(composer) {
                 awaitPointerEventScope {
                     while (true) {

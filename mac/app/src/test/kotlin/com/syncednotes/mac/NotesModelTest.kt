@@ -153,4 +153,15 @@ class NotesModelTest {
         assertFalse(model.unlock("not it"))
         assertNull(model.problem)
     }
+
+    @Test
+    fun aNewEngineForTheOtherAppearanceKeepsWhatWasJustTyped() {
+        val model = unlocked()
+        model.newNote()
+        composer.type("Written just before switching to dark", 0)
+        // No pause for the save: the switch comes at once.
+        val dark = Composer(AppFonts.family, EditorStyle.macLike(2f, dark = true), Host).also { it.setViewport(1200, 800, 0f, 0f) }
+        model.editorAppeared(dark)
+        assertEquals("Written just before switching to dark", dark.document.toString())
+    }
 }

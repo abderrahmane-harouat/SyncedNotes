@@ -2,8 +2,12 @@ package com.syncednotes.mac
 
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyShortcut
@@ -24,7 +28,10 @@ import com.syncednotes.mac.ui.MacTheme
 import com.syncednotes.mac.ui.NotesWindow
 import com.syncednotes.mac.ui.resize
 import com.syncednotes.mac.ui.toggleHighlight
+import java.awt.AWTEvent
+import kotlinx.coroutines.delay
 import java.awt.Desktop
+import java.awt.Toolkit
 import java.awt.FileDialog
 import java.io.File
 import javax.swing.SwingUtilities
@@ -55,6 +62,9 @@ private fun allowCapture(): Boolean = System.getProperty("syncednotes.allowCaptu
  * without typing; ignored for the real notes, whose passphrase is only ever typed.
  */
 private fun tryPassphrase(): String? = System.getProperty("syncednotes.tryPassphrase")?.takeIf { folderName() != REAL_FOLDER }
+
+/** Text to type into a new note at launch, through the window's own events (SelfTest). */
+private fun selfTestText(): String? = System.getProperty("syncednotes.selfTest")?.takeIf { folderName() != REAL_FOLDER }
 
 fun main() {
     // The menus go in the Mac's menu bar, under the app's own name.
@@ -89,17 +99,37 @@ fun main() {
                 window.minimumSize = java.awt.Dimension(900, 480)
             }
             val scale = LocalDensity.current.density
-            val dark = isSystemInDarkTheme()
+            var appearance by remember { mutableStateOf(Appearance.load()) }
+            val dark = appearance.dark(isSystemInDarkTheme())
+            // The window's frame follows the app's choice, not only its content.
+            LaunchedEffect(appearance) {
+                KeepOnThisMac.setAppearance(if (appearance == Appearance.SYSTEM) null else appearance == Appearance.DARK)
+            }
+            val choose: (Appearance) -> Unit = { appearance = it; it.save() }
             val editor = remember(scale, dark) { Editor(scale, dark) }
             LaunchedEffect(editor) { model.editorAppeared(editor.composer) }
+            // Typed text reaches the note this way (see MacTextInput).
+            DisposableEffect(editor) {
+                val input = MacTextInput { editor.composer }
+                val mask = AWTEvent.KEY_EVENT_MASK or AWTEvent.INPUT_METHOD_EVENT_MASK
+                Toolkit.getDefaultToolkit().addAWTEventListener(input, mask)
+                onDispose { Toolkit.getDefaultToolkit().removeAWTEventListener(input) }
+            }
             LaunchedEffect(Unit) {
                 KeepOnThisMac.install(allowCapture())
                 tryPassphrase()?.let { model.unlock(it) }
+                selfTestText()?.let { text ->
+                    delay(1500)
+                    model.newNote()
+                    delay(500)
+                    // Into the note pane: right of the two columns, below the toolbar.
+                    SelfTest.clickAndType(window, window.width - 300, 200, text)
+                }
             }
-            Menus(model, editor)
+            Menus(model, editor, appearance, choose)
             CompositionLocalProvider(LocalClipboard provides MacOnlyClipboard, LocalClipboardManager provides MacOnlyClipboard) {
-                MacTheme {
-                    NotesWindow(model, editor, onExport = { exportBackup(model) }, onImport = { importBackup(model) })
+                MacTheme(dark) {
+                    NotesWindow(model, editor, appearance, choose, onExport = { exportBackup(model) }, onImport = { importBackup(model) })
                 }
             }
         }
@@ -124,7 +154,7 @@ private fun FrameWindowScope.importBackup(model: NotesModel) {
 
 /** The File and Format menus, with the Swift app's shortcuts. */
 @androidx.compose.runtime.Composable
-private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor) {
+private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor, appearance: Appearance, onAppearance: (Appearance) -> Unit) {
     val unlocked = model.phase == NotesModel.Phase.Unlocked
     val editing = unlocked && model.document?.let { it.editable && !it.inTrash } == true
     val c = editor.composer
@@ -143,6 +173,13 @@ private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor) {
             Separator()
             Item("Change Passphrase…", enabled = unlocked, onClick = { model.changingPassphrase = true })
             Item("Lock Notes", shortcut = KeyShortcut(Key.L, meta = true, ctrl = true), enabled = unlocked, onClick = model::lock)
+        }
+        Menu("View") {
+            Menu("Appearance") {
+                for (choice in Appearance.entries) {
+                    RadioButtonItem(choice.title, selected = appearance == choice, onClick = { onAppearance(choice) })
+                }
+            }
         }
         Menu("Format") {
             @androidx.compose.runtime.Composable fun role(title: String, role: Role, key: Key) =

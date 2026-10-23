@@ -36,7 +36,8 @@ import syncednotes.note.v1.Backup as StoredBackup
  */
 class OpenNote(
     val id: Id,
-    val note: Note,
+    /** As last saved, or as opened: what the editor is given if it has to load the note again. */
+    note: Note,
     /** A note in the Trash is shown, not edited: it has to be restored first. */
     val inTrash: Boolean = false,
     /** Where a new note goes when it is first saved; a note saved before stays where it is. */
@@ -44,6 +45,9 @@ class OpenNote(
     /** False for a note holding something the engine cannot edit yet: it is shown, never saved. */
     val editable: Boolean = true,
 ) {
+    var note: Note = note
+        internal set
+
     override fun equals(other: Any?) = other is OpenNote && other.id == id
     override fun hashCode() = id.hashCode()
 }
@@ -196,6 +200,9 @@ class NotesModel(private val home: File, private val scope: CoroutineScope) {
     /** The engine on screen. Its document's changes are what gets saved. */
     fun editorAppeared(composer: Composer) {
         if (editor === composer) return
+        // A new engine (the appearance changed) loads the note again: save what the old one
+        // holds first, or the typing since the last save would be lost.
+        saveNow()
         editor = composer
         composer.document.addListener { if (!loading) contentChanged() }
         composer.document.addFormatListener { _, _ -> if (!loading) contentChanged() }
@@ -462,6 +469,7 @@ class NotesModel(private val home: File, private val scope: CoroutineScope) {
         val note = noteOf(open) ?: return
         try {
             store.save(note, open.id, folder = open.folder)
+            open.note = note
             unsaved = false
             refresh()
         } catch (e: Exception) {

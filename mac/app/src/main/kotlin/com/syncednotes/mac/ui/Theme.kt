@@ -1,6 +1,5 @@
 package com.syncednotes.mac.ui
 
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.staticCompositionLocalOf
@@ -95,6 +94,6 @@ val LocalMacColors = staticCompositionLocalOf { LightColors }
 val colors: MacColors @Composable get() = LocalMacColors.current
 
 @Composable
-fun MacTheme(content: @Composable () -> Unit) {
-    CompositionLocalProvider(LocalMacColors provides if (isSystemInDarkTheme()) DarkColors else LightColors, content = content)
+fun MacTheme(dark: Boolean, content: @Composable () -> Unit) {
+    CompositionLocalProvider(LocalMacColors provides if (dark) DarkColors else LightColors, content = content)
 }

@@ -150,6 +150,7 @@ tasks.withType<JavaExec>().configureEach {
 // starts, after Compose has set the app's own arguments: the last of each wins.
 tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
     val tryUnlock = project.hasProperty("tryUnlock")
+    val selfTest = project.findProperty("selfTest") as String?
     val library = glyphsRelease.asFile.absolutePath
     doFirst {
         (this as JavaExec).jvmArgs(
@@ -159,6 +160,8 @@ tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
         )
         // Unlocks the made-up notes of makeTryNotes at launch, with their made-up passphrase.
         if (tryUnlock) jvmArgs("-Dsyncednotes.tryPassphrase=made-up try passphrase")
+        // Types into a new note through the window's own events: -PselfTest="some text".
+        selfTest?.let { jvmArgs("-Dsyncednotes.selfTest=$it") }
     }
 }
 

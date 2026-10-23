@@ -69,6 +69,18 @@ object KeepOnThisMac {
         }
     }
 
+    /**
+     * The windows' own frame (title bar, buttons, sheets) in light or dark, matching the app's
+     * choice; null follows the Mac.
+     */
+    fun setAppearance(dark: Boolean?) = onMainThread {
+        val appearance = if (dark == null) MemorySegment.NULL else Arena.ofConfined().use { arena ->
+            ObjC.sendWithPointer(ObjC.cls("NSAppearance"), "appearanceNamed:", ObjC.nsString(if (dark) "NSAppearanceNameDarkAqua" else "NSAppearanceNameAqua", arena))
+        }
+        val app = ObjC.send(ObjC.cls("NSApplication"), "sharedApplication")
+        ObjC.sendVoidPointer(app, "setAppearance:", appearance)
+    }
+
     /** Runs [block] on AppKit's main thread, which is not the window thread on the JVM. */
     fun onMainThread(block: () -> Unit) {
         MainThread.run(block)

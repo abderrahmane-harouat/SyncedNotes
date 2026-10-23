@@ -42,6 +42,7 @@ import androidx.compose.ui.unit.dp
 import com.syncednotes.core.Id
 import com.syncednotes.core.hex
 import com.syncednotes.core.NoteStore
+import com.syncednotes.mac.Appearance
 import com.syncednotes.mac.NotesModel
 import com.syncednotes.mac.NotesModel.Place
 
@@ -52,7 +53,15 @@ import com.syncednotes.mac.NotesModel.Place
  * disclosure arrow: every row is then an ordinary row, selected and right-clicked the same way.
  */
 @Composable
-fun Sidebar(model: NotesModel, onDeleteFolder: (Id) -> Unit, onExport: () -> Unit, onImport: () -> Unit, modifier: Modifier = Modifier) {
+fun Sidebar(
+    model: NotesModel,
+    onDeleteFolder: (Id) -> Unit,
+    onExport: () -> Unit,
+    onImport: () -> Unit,
+    appearance: Appearance,
+    onAppearance: (Appearance) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val c = colors
     Column(modifier.fillMaxHeight().background(c.sidebar)) {
         // Room for the window's buttons, which sit over the sidebar as in the Mac's own apps.
@@ -77,7 +86,7 @@ fun Sidebar(model: NotesModel, onDeleteFolder: (Id) -> Unit, onExport: () -> Uni
             }
         }
         // Backups and new folders in plain sight, under the list, not only in the menus.
-        Row(Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().padding(horizontal = 8.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
             Tooltip("New Folder (⇧⌘N)") {
                 Row(
                     Modifier.clip(RoundedCornerShape(6.dp)).clickable { model.newFolder() }.padding(horizontal = 4.dp, vertical = 4.dp),
@@ -85,10 +94,25 @@ fun Sidebar(model: NotesModel, onDeleteFolder: (Id) -> Unit, onExport: () -> Uni
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     Icon(Icons.folderPlus, c.text, size = 16.dp)
-                    BasicText("New Folder", style = MacType.body.copy(color = c.text))
+                    BasicText("New Folder", style = MacType.body.copy(color = c.text), maxLines = 1, softWrap = false)
                 }
             }
             Spacer(Modifier.weight(1f))
+            // Light, dark, or as the Mac is: in plain sight, as well as in the View menu.
+            var appearanceMenu by remember { mutableStateOf(false) }
+            Box {
+                Tooltip("Appearance: ${appearance.title}") {
+                    Box(
+                        Modifier.clip(RoundedCornerShape(6.dp)).clickable { appearanceMenu = true }.padding(4.dp),
+                        contentAlignment = Alignment.Center,
+                    ) { Icon(Icons.appearance, c.text, size = 16.dp) }
+                }
+                MenuPopup(
+                    appearanceMenu, { appearanceMenu = false },
+                    Appearance.entries.map { choice -> MenuItem(choice.title, checked = appearance == choice) { onAppearance(choice) } },
+                    offset = IntOffset(0, -120),
+                )
+            }
             var backupMenu by remember { mutableStateOf(false) }
             Box {
                 Tooltip("Export or import an encrypted backup of every note") {
@@ -98,7 +122,7 @@ fun Sidebar(model: NotesModel, onDeleteFolder: (Id) -> Unit, onExport: () -> Uni
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         Icon(Icons.drive, c.text, size = 16.dp)
-                        BasicText("Backup", style = MacType.body.copy(color = c.text))
+                        BasicText("Backup", style = MacType.body.copy(color = c.text), maxLines = 1, softWrap = false)
                     }
                 }
                 MenuPopup(

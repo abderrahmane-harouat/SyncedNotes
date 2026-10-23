@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Drawn for this app, in the toolbar icons' manner: thin strokes, round ends. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"
+    android:autoMirrored="false">
+    <path android:pathData="M4.5,7L19.5,7M9.5,7L9.5,5A1,1 0,0 1,10.5 4L13.5,4A1,1 0,0 1,14.5 5L14.5,7M6.5,7L7.4,18.6A1.5,1.5 0,0 0,8.9 20L15.1,20A1.5,1.5 0,0 0,16.6 18.6L17.5,7M10.25,10.5L10.5,16.5M13.75,10.5L13.5,16.5" android:strokeColor="#FF1D1D1F" android:strokeWidth="1.75"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

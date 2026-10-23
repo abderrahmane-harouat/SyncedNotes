@@ -34,6 +34,14 @@ kotlin {
 
 dependencies {
     implementation(project(":engine"))
+    // The lock, the store and sync, the Mac's own (shared/core).
+    implementation(project(":core"))
+    // The store's database on the phone: SQLCipher 4's format, as on the Mac, where the JDBC
+    // driver the Mac uses has no Android build.
+    implementation("net.zetetic:sqlcipher-android:4.19.1@aar")
+    implementation("androidx.sqlite:sqlite:2.7.0")
+    // The main thread's dispatcher, for screens that watch sync.
+    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.9.0")
 }
 
 // The Rust half (shared/glyphs) is built with the NDK's linker for each ABI we ship, into a

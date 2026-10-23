@@ -1,14 +1,23 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
 
-    <!-- No INTERNET permission: notes never leave the device. Backups off for the same reason. -->
+    <!-- Android asks for INTERNET for any socket, local ones included: sync talks only to the
+         paired Mac on the local network, and refuses any other address (Docs/Sync.md). -->
+    <uses-permission android:name="android.permission.INTERNET" />
+
+    <!-- Backups off, and nothing handed to a new phone or to Google's cloud: the notes leave
+         this phone only to the paired Mac. -->
     <application
+        android:name=".NotesApp"
         android:allowBackup="false"
         android:fullBackupContent="false"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher"
         android:label="@string/app_name"
         android:theme="@android:style/Theme.Material.Light.NoActionBar">
         <activity
-            android:name=".EditorActivity"
+            android:name=".LockActivity"
             android:exported="true"
             android:windowSoftInputMode="adjustResize">
             <intent-filter>
@@ -16,5 +25,20 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".NotesActivity"
+            android:exported="false"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+        <activity
+            android:name=".EditorActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize|stateHidden" />
+        <!-- Kept through a rotation: recreating it would end a pairing half way. -->
+        <activity
+            android:name=".SyncActivity"
+            android:exported="false"
+            android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|keyboardHidden"
+            android:windowSoftInputMode="adjustResize" />
     </application>
 </manifest>

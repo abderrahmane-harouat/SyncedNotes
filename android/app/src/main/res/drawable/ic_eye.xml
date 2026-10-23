@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- The Mac's eye (mac/app ui/Icons.kt), for showing and hiding a passphrase. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24">
+    <path android:pathData="M2.5,12s3.5,-6.5 9.5,-6.5S21.5,12 21.5,12s-3.5,6.5 -9.5,6.5S2.5,12 2.5,12zM15,12a3,3 0,1 1,-6 0a3,3 0,1 1,6 0z" android:strokeColor="#FF1D1D1F" android:strokeWidth="1.6"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

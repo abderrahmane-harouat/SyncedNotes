@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
@@ -68,15 +69,15 @@ fun LockScreen(model: NotesModel, firstRun: Boolean) {
                     style = MacType.body.copy(color = c.secondaryText, textAlign = TextAlign.Center),
                 )
             }
-            PassphraseField(passphrase, "Passphrase", focusRequester = first, onSubmit = {
+            PassphraseField(passphrase, "Passphrase", focusRequester = first, large = true, onSubmit = {
                 if (firstRun && repeated.text.isEmpty()) second.requestFocus() else submit()
             })
-            if (firstRun) PassphraseField(repeated, "The same passphrase again", focusRequester = second, onSubmit = ::submit)
+            if (firstRun) PassphraseField(repeated, "The same passphrase again", focusRequester = second, large = true, onSubmit = ::submit)
             message?.let {
                 BasicText(it, style = MacType.body.copy(color = c.danger, textAlign = TextAlign.Center))
             }
             Spacer(Modifier.height(2.dp))
-            MacButton(if (firstRun) "Create" else "Unlock", ::submit, primary = true, enabled = passphrase.text.isNotEmpty())
+            MacButton(if (firstRun) "Create" else "Unlock", ::submit, Modifier.fillMaxWidth(), primary = true, enabled = passphrase.text.isNotEmpty(), large = true)
         }
     }
 }

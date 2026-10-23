@@ -51,9 +51,13 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.DpOffset
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.syncednotes.mac.SecureInput
 
-/** A push button: plain, or the window's default action in the accent colour. */
+/**
+ * A push button: plain, or the window's default action in the accent colour. [large] for the
+ * one button of a screen of its own, such as Unlock, where the Mac's small size looks lost.
+ */
 @Composable
 fun MacButton(
     text: String,
@@ -62,6 +66,7 @@ fun MacButton(
     primary: Boolean = false,
     destructive: Boolean = false,
     enabled: Boolean = true,
+    large: Boolean = false,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
@@ -79,14 +84,15 @@ fun MacButton(
     }
     Box(
         modifier
-            .height(26.dp)
-            .clip(RoundedCornerShape(7.dp))
+            .height(if (large) 40.dp else 26.dp)
+            .clip(RoundedCornerShape(if (large) 10.dp else 7.dp))
             .background(background)
             .clickable(interaction, indication = null, enabled = enabled, onClick = onClick)
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center,
     ) {
-        BasicText(text, style = MacType.body.copy(color = foreground, fontWeight = if (primary) FontWeight.Medium else FontWeight.Normal))
+        val style = if (large) MacType.body.copy(fontSize = 15.sp) else MacType.body
+        BasicText(text, style = style.copy(color = foreground, fontWeight = if (primary) FontWeight.Medium else FontWeight.Normal))
     }
 }
 
@@ -217,25 +223,29 @@ fun PassphraseField(
     modifier: Modifier = Modifier,
     onSubmit: () -> Unit = {},
     focusRequester: FocusRequester = remember { FocusRequester() },
+    /** For the lock screen, where the field is the whole screen's business. */
+    large: Boolean = false,
 ) {
     val c = colors
     var shown by remember { mutableStateOf(false) }
     var focused by remember { mutableStateOf(false) }
+    val corner = RoundedCornerShape(if (large) 10.dp else 7.dp)
+    val text = if (large) MacType.body.copy(fontSize = 15.sp) else MacType.body
     Row(
         modifier
             .fillMaxWidth()
-            .height(28.dp)
-            .clip(RoundedCornerShape(7.dp))
+            .height(if (large) 40.dp else 28.dp)
+            .clip(corner)
             .background(c.field)
-            .border(if (focused) 2.dp else 1.dp, if (focused) c.accent.copy(alpha = 0.6f) else c.fieldBorder, RoundedCornerShape(7.dp))
-            .padding(start = 8.dp, end = 4.dp),
+            .border(if (focused) 2.dp else 1.dp, if (focused) c.accent.copy(alpha = 0.6f) else c.fieldBorder, corner)
+            .padding(start = if (large) 12.dp else 8.dp, end = if (large) 6.dp else 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(Modifier.weight(1f)) {
-            if (state.text.isEmpty()) BasicText(placeholder, style = MacType.body.copy(color = c.tertiaryText), maxLines = 1)
+            if (state.text.isEmpty()) BasicText(placeholder, style = text.copy(color = c.tertiaryText), maxLines = 1)
             BasicSecureTextField(
                 state = state,
-                textStyle = MacType.body.copy(color = c.text),
+                textStyle = text.copy(color = c.text),
                 cursorBrush = SolidColor(c.accent),
                 textObfuscationMode = if (shown) TextObfuscationMode.Visible else TextObfuscationMode.Hidden,
                 modifier = Modifier
@@ -247,10 +257,10 @@ fun PassphraseField(
         }
         Tooltip(if (shown) "Hide Passphrase" else "Show Passphrase") {
             Box(
-                Modifier.size(24.dp).clip(RoundedCornerShape(5.dp)).clickable { shown = !shown }.pointerHoverIcon(PointerIcon.Default),
+                Modifier.size(if (large) 30.dp else 24.dp).clip(RoundedCornerShape(5.dp)).clickable { shown = !shown }.pointerHoverIcon(PointerIcon.Default),
                 contentAlignment = Alignment.Center,
             ) {
-                Icon(if (shown) Icons.eyeSlash else Icons.eye, c.secondaryText, size = 16.dp)
+                Icon(if (shown) Icons.eyeSlash else Icons.eye, c.secondaryText, size = if (large) 19.dp else 16.dp)
             }
         }
     }

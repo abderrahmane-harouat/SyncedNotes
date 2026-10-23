@@ -106,6 +106,42 @@ fun Context.privateField(hint: String, secret: Boolean = false): EditText = Edit
     imeOptions = EditorInfo.IME_FLAG_NO_PERSONALIZED_LEARNING or EditorInfo.IME_FLAG_NO_EXTRACT_UI
     importantForAutofill = View.IMPORTANT_FOR_AUTOFILL_NO
     if (Build.VERSION.SDK_INT >= 30) importantForContentCapture = View.IMPORTANT_FOR_CONTENT_CAPTURE_NO
+    if (secret) showHideButton()
+}
+
+/**
+ * An eye at the end of a passphrase field, as on the Mac: tapped, it shows what was typed, and
+ * tapped again hides it. Shown, the field is a visible password, which keyboards treat like a
+ * hidden one: no suggestions, nothing learned.
+ */
+@android.annotation.SuppressLint("ClickableViewAccessibility")
+private fun EditText.showHideButton() {
+    var shown = false
+    fun update() {
+        val icon = context.getDrawable(if (shown) R.drawable.ic_eye_slash else R.drawable.ic_eye)!!.mutate()
+        icon.setTint(Palette.SECONDARY)
+        setCompoundDrawablesRelativeWithIntrinsicBounds(null, null, icon, null)
+    }
+    compoundDrawablePadding = context.dp(8)
+    update()
+    setOnTouchListener { _, event ->
+        val icon = compoundDrawablesRelative[2] ?: return@setOnTouchListener false
+        // The eye's own width and the padding beside it, from the end: a generous target.
+        val inEye = if (layoutDirection == View.LAYOUT_DIRECTION_RTL) event.x < paddingLeft + icon.bounds.width() + context.dp(8)
+        else event.x > width - paddingRight - icon.bounds.width() - context.dp(8)
+        if (!inEye) return@setOnTouchListener false
+        if (event.action == android.view.MotionEvent.ACTION_UP) {
+            shown = !shown
+            val caret = selectionEnd
+            inputType = InputType.TYPE_CLASS_TEXT or
+                if (shown) InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD else InputType.TYPE_TEXT_VARIATION_PASSWORD
+            // Changing the input type puts the caret at the start and the font to monospace.
+            typeface = android.graphics.Typeface.DEFAULT
+            setSelection(caret.coerceIn(0, text.length))
+            update()
+        }
+        true
+    }
 }
 
 fun Context.column(vararg children: View, padding: Int = 0): LinearLayout = LinearLayout(this).apply {

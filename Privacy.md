@@ -149,7 +149,8 @@ keyboard learning sees a note), the same lock and store as the Mac, and the same
   is there, to check the app's look on made-up notes.
 - **The few text fields** (passphrase, search, folder names) tell the keyboard not to learn or
   suggest (`IME_FLAG_NO_PERSONALIZED_LEARNING`; Gboard and Samsung Keyboard then show their
-  incognito mark), and every window is closed to autofill services and to content capture,
+  incognito mark; a passphrase shown with the eye is a visible password, which they treat the
+  same way), and every window is closed to autofill services and to content capture,
   which would hand what is on screen to another app or the system's intelligence.
 - **The network**: Android's `INTERNET` permission, which it requires for any socket, local
   ones included. The phone finds the Mac with Network Service Discovery (multicast DNS on the

@@ -42,6 +42,9 @@ class EditorActivity : ScreenActivity() {
     private val cards: List<CardPopup> get() = listOf(textOptions, fontColor, highlight)
 
     private lateinit var id: Id
+    /** Samsung's reading mode: the note shown without the toolbar or the keyboard, to read. */
+    private var reading = false
+    private lateinit var readingButton: ImageButton
     private lateinit var findBar: View
     private lateinit var findField: android.widget.EditText
     private lateinit var findCount: TextView
@@ -100,9 +103,10 @@ class EditorActivity : ScreenActivity() {
         val pageColor = composer.style.background
 
         textOptions = TextOptionsPanel(this, composer)
-        fontColor = ColorPopup(this, R.string.font_color, Palettes.text, pageColor,
-            current = { composer.formatState().color ?: composer.style.textColor },
-            onPick = { composer.setColor(it.takeIf { c -> c != composer.style.textColor }, now()) })
+        // Default shows as the note's own text colour; None, for a highlight, as the page.
+        fontColor = ColorPopup(this, R.string.font_color, Palettes.text, composer.style.textColor,
+            current = { composer.formatState().color ?: 0 },
+            onPick = { composer.setColor(it.takeIf { c -> c != 0 }, now()) })
         highlight = ColorPopup(this, R.string.font_background, Palettes.highlight, pageColor,
             current = { composer.formatState().highlight ?: 0 },
             onPick = { composer.setHighlight(it.takeIf { c -> c != 0 }, now()) })
@@ -214,7 +218,7 @@ class EditorActivity : ScreenActivity() {
                     format.decode(stored, doc)
                 }
             }
-            composer.editable = editable
+            composer.editable = editable && !reading
         } finally {
             loading = false
         }
@@ -267,7 +271,7 @@ class EditorActivity : ScreenActivity() {
         stored = runCatching { store.load(id) }.getOrNull() ?: return
         inTrash = store.isInTrash(id)
         editable = NoteFormat.canEdit(stored) && !inTrash
-        findViewById<View>(R.id.toolbar).visibility = if (editable) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.toolbar).visibility = if (editable && !reading) View.VISIBLE else View.GONE
         load()
     }
 
@@ -282,11 +286,21 @@ class EditorActivity : ScreenActivity() {
         }
         val back = button(R.drawable.ic_back, "Notes") { finish() }
         val more = button(R.drawable.ic_more, "More") { noteMenu(it) }
-        return row(back, spacer(), more).apply {
+        readingButton = button(R.drawable.ic_book, getString(R.string.reading_mode)) { setReading(!reading) }
+        return row(back, spacer(), readingButton, more).apply {
             setBackgroundColor(color)
             setPadding(dp(6), 0, dp(6), 0)
             layoutParams = LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, dp(48))
         }
+    }
+
+    private fun setReading(on: Boolean) {
+        reading = on
+        closeCards()
+        canvas.composer.editable = editable && !on
+        findViewById<View>(R.id.toolbar).visibility = if (editable && !on) View.VISIBLE else View.GONE
+        if (on) getSystemService(android.view.inputmethod.InputMethodManager::class.java).hideSoftInputFromWindow(canvas.windowToken, 0)
+        readingButton.background = if (on) rounded(Palette.SELECTED, dp(22).toFloat()) else pressable(radius = dp(22).toFloat())
     }
 
     private fun noteMenu(anchor: View) {

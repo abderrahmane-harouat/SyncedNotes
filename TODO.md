@@ -85,6 +85,10 @@ Trash and pictures. Tried between this Mac's try-out notes and a Galaxy M32.
 - [x] Moving folders on the phone.
 - [x] `FLAG_SECURE` on the phone, so Recent apps shows no note.
 - [x] Find in Note on both, every match marked.
+- [x] The same tools on both: paragraph styles, the four lists, alignment with justify, the
+  character styles, inline code, quote, code block, divider, line spacing, indent, the Mac's
+  text colours and six highlights; Samsung's reading mode on the phone; undo and redo on the
+  Mac's toolbar.
 - [ ] Sync in the background on the phone, while the app is closed: today it syncs while open
   and unlocked, as SyncedPass does.
 - [ ] Deletion marks kept forever: prune those both devices have seen.

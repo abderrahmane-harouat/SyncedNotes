@@ -2,6 +2,7 @@ package com.syncednotes.mac.ui
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -65,8 +66,13 @@ fun EditorPane(
         Row(Modifier.fillMaxWidth().height(HEADER_HEIGHT).padding(start = 12.dp, end = 12.dp, top = TITLE_BAR), verticalAlignment = Alignment.CenterVertically) {
             AppearanceButton(appearance, onAppearance)
             model.sync?.let { SyncButton(model, it) }
-            Spacer(Modifier.weight(1f))
-            if (open != null && open.editable && !open.inTrash) FormatToolbar(editor)
+            // The tools keep to the right, and scroll sideways when the pane is too narrow for
+            // them all, as the phone's toolbar does, rather than running off its edge.
+            Box(Modifier.weight(1f).padding(start = 8.dp), contentAlignment = Alignment.CenterEnd) {
+                if (open != null && open.editable && !open.inTrash) {
+                    Box(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) { FormatToolbar(editor) }
+                }
+            }
         }
         when {
             open != null -> {
@@ -198,9 +204,11 @@ private fun moveItems(model: NotesModel, ids: Set<Id>): List<MenuItem> = buildLi
 }
 
 /**
- * The formatting tools above the note, as in the Swift app: text style and size, the three
- * lists, bold, highlight and text colour. A button stays pressed while its style is on at the
- * selection, as the engine reports it, so it cannot disagree with the text.
+ * The formatting tools above the note: text style and size, the three lists, the four
+ * character styles, highlight and text colour, then undo and redo, the phone's toolbar's own
+ * tools. The Aa menu holds the rest of what the phone's Text options card does, so every tool
+ * is in reach on both. A button stays pressed while its style is on at the selection, as the
+ * engine reports it, so it cannot disagree with the text.
  */
 @Composable
 private fun FormatToolbar(editor: Editor) {
@@ -219,7 +227,15 @@ private fun FormatToolbar(editor: Editor) {
         ToolbarButton(Icons.checklist, "Checklist (⇧⌘L)", { composer.toggleList(ListType.CHECKBOX, now()); editor.focus.requestFocus() }, selected = state?.list == ListType.CHECKBOX)
         Gap()
         TextButton("B", "Bold (⌘B)", { composer.toggle(CharStyle.BOLD, now()); editor.focus.requestFocus() }, selected = state?.bold == true, bold = true)
-        ToolbarButton(Icons.highlighter, "Highlight (⇧⌘H)", { toggleHighlight(editor); editor.focus.requestFocus() }, selected = state?.highlight != null)
+        TextButton("I", "Italic (⌘I)", { composer.toggle(CharStyle.ITALIC, now()); editor.focus.requestFocus() }, selected = state?.italic == true, decoration = Decoration.ITALIC)
+        TextButton("U", "Underline (⌘U)", { composer.toggle(CharStyle.UNDERLINE, now()); editor.focus.requestFocus() }, selected = state?.underline == true, decoration = Decoration.UNDERLINE)
+        TextButton("S", "Strikethrough (⇧⌘X)", { composer.toggle(CharStyle.STRIKETHROUGH, now()); editor.focus.requestFocus() }, selected = state?.strikethrough == true, decoration = Decoration.STRIKETHROUGH)
+        Gap()
+        var highlightMenu by remember { mutableStateOf(false) }
+        Box {
+            ToolbarButton(Icons.highlighter, "Highlight", { highlightMenu = true }, selected = state?.highlight != null)
+            MenuPopup(highlightMenu, { highlightMenu = false }, highlightMenuItems(editor), offset = IntOffset(-60, 60))
+        }
         var colorMenu by remember { mutableStateOf(false) }
         Box {
             Tooltip("Text Color") {
@@ -232,6 +248,9 @@ private fun FormatToolbar(editor: Editor) {
             }
             MenuPopup(colorMenu, { colorMenu = false }, colorItems(editor), offset = IntOffset(-120, 60))
         }
+        Gap()
+        ToolbarButton(Icons.undo, "Undo (⌘Z)", { composer.undo(now()); editor.focus.requestFocus() }, enabled = state?.canUndo == true)
+        ToolbarButton(Icons.redo, "Redo (⇧⌘Z)", { composer.redo(now()); editor.focus.requestFocus() }, enabled = state?.canRedo == true)
     }
 }
 
@@ -275,16 +294,30 @@ private fun SyncButton(model: NotesModel, sync: com.syncednotes.core.sync.SyncSe
 /** The Mac's system green, for a phone in sync. */
 private val SYNCED_GREEN = Color(0xFF34C759)
 
+/** How a letter on a toolbar button shows the style it stands for. */
+private enum class Decoration { NONE, ITALIC, UNDERLINE, STRIKETHROUGH }
+
 /** A toolbar button whose face is a letter or two. */
 @Composable
-private fun TextButton(text: String, help: String, onClick: () -> Unit, selected: Boolean = false, bold: Boolean = false) {
+private fun TextButton(text: String, help: String, onClick: () -> Unit, selected: Boolean = false, bold: Boolean = false, decoration: Decoration = Decoration.NONE) {
     val c = colors
     Tooltip(help) {
         Box(
             Modifier.size(30.dp, 28.dp).clip(RoundedCornerShape(7.dp)).background(if (selected) c.controlPressed else Color.Transparent).clickable(onClick = onClick),
             contentAlignment = Alignment.Center,
         ) {
-            BasicText(text, style = MacType.body.copy(color = c.secondaryText, fontSize = 15.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium, textAlign = TextAlign.Center))
+            BasicText(
+                text,
+                style = MacType.body.copy(
+                    color = c.secondaryText, fontSize = 15.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium, textAlign = TextAlign.Center,
+                    fontStyle = if (decoration == Decoration.ITALIC) androidx.compose.ui.text.font.FontStyle.Italic else null,
+                    textDecoration = when (decoration) {
+                        Decoration.UNDERLINE -> androidx.compose.ui.text.style.TextDecoration.Underline
+                        Decoration.STRIKETHROUGH -> androidx.compose.ui.text.style.TextDecoration.LineThrough
+                        else -> null
+                    },
+                ),
+            )
         }
     }
 }
@@ -304,12 +337,50 @@ private fun textStyleItems(editor: Editor): List<MenuItem> {
         composer.toggleRole(target, now())
         editor.focus.requestFocus()
     }
+    val state = editor.format
+    fun act(title: String, checked: Boolean = false, enabled: Boolean = true, run: () -> Unit) = MenuItem(title, enabled = enabled, checked = checked) {
+        run()
+        editor.focus.requestFocus()
+    }
     return listOf(
         item("Title", Role.TITLE), item("Heading", Role.HEADING), item("Subheading", Role.SUBHEADING), item("Body", Role.BODY),
+        MenuItem.SEPARATOR,
+        item("Block Quote", Role.QUOTE),
+        item("Code Block", Role.CODE_BLOCK),
+        act("Inline Code", checked = state?.code == true) { composer.toggle(CharStyle.CODE, now()) },
+        act("Dashed List", checked = state?.list == ListType.DASH) { composer.toggleList(ListType.DASH, now()) },
+        act("Insert Divider") { composer.insertDivider(now()) },
+        MenuItem.SEPARATOR,
+        act("Align Left", checked = state?.alignment == com.syncednotes.engine.text.Alignment.LEFT) { composer.setAlignment(com.syncednotes.engine.text.Alignment.LEFT, now()) },
+        act("Center", checked = state?.alignment == com.syncednotes.engine.text.Alignment.CENTER) { composer.setAlignment(com.syncednotes.engine.text.Alignment.CENTER, now()) },
+        act("Justify", checked = state?.alignment == com.syncednotes.engine.text.Alignment.JUSTIFIED) { composer.setAlignment(com.syncednotes.engine.text.Alignment.JUSTIFIED, now()) },
+        act("Align Right", checked = state?.alignment == com.syncednotes.engine.text.Alignment.RIGHT) { composer.setAlignment(com.syncednotes.engine.text.Alignment.RIGHT, now()) },
+        MenuItem.SEPARATOR,
+        act("Increase Indent") { composer.indent(now()) },
+        act("Decrease Indent") { composer.outdent(now()) },
+        MenuItem.SEPARATOR,
+        act("Line Spacing 1.0", checked = state?.lineSpacing == 1f) { composer.setLineSpacing(1f, now()) },
+        act("Line Spacing 1.15", checked = state?.lineSpacing == 1.15f) { composer.setLineSpacing(1.15f, now()) },
+        act("Line Spacing 1.5", checked = state?.lineSpacing == 1.5f) { composer.setLineSpacing(1.5f, now()) },
+        act("Line Spacing 2.0", checked = state?.lineSpacing == 2f) { composer.setLineSpacing(2f, now()) },
         MenuItem.SEPARATOR,
         MenuItem("Bigger") { resize(editor, +1f) },
         MenuItem("Smaller") { resize(editor, -1f) },
     )
+}
+
+/** None, then the six highlights a note can have: the phone's Font background card's colours. */
+private fun highlightMenuItems(editor: Editor): List<MenuItem> {
+    val composer = editor.composer
+    val current = editor.format?.highlight
+    return listOf(MenuItem("None", checked = current == null) { composer.setHighlight(null, now()); editor.focus.requestFocus() }, MenuItem.SEPARATOR) +
+        highlightItems(editor).map { (name, argb) ->
+            MenuItem(name, checked = current == argb) {
+                composer.setHighlight(argb, now())
+                lastHighlight = argb
+                editor.focus.requestFocus()
+            }
+        }
 }
 
 /**

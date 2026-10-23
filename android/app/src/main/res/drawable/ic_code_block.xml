@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Drawn for this app, in the panel icons' manner: angle brackets, for a code block. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"
+    android:autoMirrored="false">
+    <path android:pathData="M8.5,8L4.5,12L8.5,16M15.5,8L19.5,12L15.5,16M13.25,6.5L10.75,17.5" android:strokeColor="#FF4C4C4C" android:strokeWidth="1.5"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

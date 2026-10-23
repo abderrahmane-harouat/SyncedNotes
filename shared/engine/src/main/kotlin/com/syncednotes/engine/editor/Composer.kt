@@ -474,6 +474,8 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val code: Boolean = false,
         /** Null when the paragraphs disagree. */
         val role: Role? = Role.BODY,
+        /** Line height as a multiple of normal; null when the paragraphs disagree. */
+        val lineSpacing: Float? = 1f,
     ) {
         fun has(style: CharStyle): Boolean = when (style) {
             CharStyle.BOLD -> bold
@@ -516,6 +518,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             checked = list == ListType.CHECKBOX && styles.all { it.checked },
             code = styleOn(CharStyle.CODE),
             role = styles.map { it.role }.distinct().singleOrNull(),
+            lineSpacing = styles.map { if (it.lineSpacing == 0f) 1f else it.lineSpacing }.distinct().singleOrNull(),
         )
     }
 
@@ -667,6 +670,21 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
 
     fun setAlignment(alignment: Alignment, now: Long) {
         formatEdit(now) { for (p in selectedParagraphs()) document.setParagraphStyle(p, document.paragraphStyle(p).copy(alignment = alignment)) }
+    }
+
+    /**
+     * A divider below the paragraph the caret is in, and the caret on a new line after it. A
+     * divider is the note format's: a paragraph of one U+FFFC whose role draws the line.
+     */
+    fun insertDivider(now: Long) {
+        if (!editable) return
+        val p = document.paragraphAt(selection.end)
+        select(Selection(document.paragraphEnd(p)), now)
+        type("\n\uFFFC\n", now)
+        formatEdit(now) {
+            document.setParagraphStyle(p + 1, ParagraphStyle(role = Role.DIVIDER))
+            document.setParagraphStyle(p + 2, ParagraphStyle.DEFAULT)
+        }
     }
 
     /** Line height as a multiple of normal (1, 1.15, 1.5, 2) for the selected paragraphs. */

@@ -19,6 +19,18 @@ android {
     // The fonts are the Mac's too; one copy in shared/assets serves both.
     sourceSets["main"].assets.directories.add("../../shared/assets")
 
+    buildTypes {
+        // A copy beside the real app, with notes of its own, for trying a change on made-up
+        // notes on the user's phone without touching theirs: the phone's SyncedNotes-Try.
+        create("tryout") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".tryout"
+            manifestPlaceholders["appLabel"] = "SyncedNotes Try"
+        }
+        getByName("debug") { manifestPlaceholders["appLabel"] = "SyncedNotes" }
+        getByName("release") { manifestPlaceholders["appLabel"] = "SyncedNotes" }
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

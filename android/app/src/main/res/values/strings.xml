@@ -20,4 +20,16 @@
     <string name="font_size">Font size</string>
     <string name="undo">Undo</string>
     <string name="redo">Redo</string>
+    <string name="role_title">Title</string>
+    <string name="role_heading">Heading</string>
+    <string name="role_subheading">Subheading</string>
+    <string name="role_body">Body</string>
+    <string name="dashes">Dashed list</string>
+    <string name="align_justify">Justify</string>
+    <string name="quote">Block quote</string>
+    <string name="code_block">Code block</string>
+    <string name="inline_code">Inline code</string>
+    <string name="divider">Insert divider</string>
+    <string name="line_spacing">Line spacing</string>
+    <string name="reading_mode">Reading mode</string>
 </resources>

@@ -254,6 +254,7 @@ private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor, layout: Wi
             Separator()
             CheckboxItem("Block Quote", checked = state?.role == Role.QUOTE, shortcut = KeyShortcut(Key.Apostrophe, meta = true), enabled = editing, onCheckedChange = { act { c.toggleRole(Role.QUOTE, now()) }() })
             CheckboxItem("Code Block", checked = state?.role == Role.CODE_BLOCK, enabled = editing, onCheckedChange = { act { c.toggleRole(Role.CODE_BLOCK, now()) }() })
+            Item("Insert Divider", shortcut = KeyShortcut(Key.D, meta = true, shift = true), enabled = editing, onClick = act { c.insertDivider(now()) })
             Separator()
             @androidx.compose.runtime.Composable fun style(title: String, style: CharStyle, shortcut: KeyShortcut?) =
                 CheckboxItem(title, checked = state?.has(style) == true, shortcut = shortcut, enabled = editing, onCheckedChange = { act { c.toggle(style, now()) }() })
@@ -262,6 +263,12 @@ private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor, layout: Wi
             style("Underline", CharStyle.UNDERLINE, KeyShortcut(Key.U, meta = true))
             style("Strikethrough", CharStyle.STRIKETHROUGH, KeyShortcut(Key.X, meta = true, shift = true))
             CheckboxItem("Highlight", checked = state?.highlight != null, shortcut = KeyShortcut(Key.H, meta = true, shift = true), enabled = editing, onCheckedChange = { act { toggleHighlight(editor) }() })
+            Menu("Highlight Color") {
+                RadioButtonItem("None", selected = state?.highlight == null, enabled = editing, onClick = act { c.setHighlight(null, now()) })
+                for ((name, argb) in com.syncednotes.mac.ui.highlightItems(editor)) {
+                    RadioButtonItem(name, selected = state?.highlight == argb, enabled = editing, onClick = act { c.setHighlight(argb, now()) })
+                }
+            }
             style("Inline Code", CharStyle.CODE, null)
             Separator()
             Item("Bigger", shortcut = KeyShortcut(Key.Equals, meta = true), enabled = editing, onClick = { resize(editor, +1f) })

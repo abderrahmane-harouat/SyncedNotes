@@ -202,4 +202,29 @@ class BlocksTest {
         assertEquals(Selection(0, 9), c.selection)
         assertFalse(c.undo(50))
     }
+
+    @Test
+    fun aDividerGoesBelowTheParagraphWithTheCaretOnANewLineAfterIt() {
+        val c = composer("Above\nBelow")
+        c.caretTo(2)
+        c.insertDivider(0)
+        assertEquals(4, c.document.paragraphCount)
+        assertEquals(Role.DIVIDER, c.style(1).role)
+        assertEquals("\uFFFC", c.document.substring(c.document.paragraphStart(1), c.document.paragraphEnd(1)))
+        assertEquals(Role.BODY, c.style(2).role)
+        assertEquals(c.document.paragraphStart(2), c.selection.start)
+        c.type("After", 0)
+        assertEquals("Above\n\uFFFC\nAfter\nBelow", c.document.text.toString())
+    }
+
+    @Test
+    fun theLineSpacingShowsWhatTheParagraphsHaveAndNothingWhenTheyDisagree() {
+        val c = composer("one\ntwo")
+        assertEquals(1f, c.formatState().lineSpacing)
+        c.caretTo(0)
+        c.setLineSpacing(1.5f, 0)
+        assertEquals(1.5f, c.formatState().lineSpacing)
+        c.setSelectionFromInput(0, 7, 0)
+        assertNull(c.formatState().lineSpacing)
+    }
 }

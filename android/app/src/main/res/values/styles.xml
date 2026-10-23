@@ -24,6 +24,21 @@
         <item name="android:layout_height">32dp</item>
     </style>
 
+    <!-- A word in a panel group, chosen like a button: the paragraph styles. -->
+    <style name="PanelChip">
+        <!-- As wide as its word, the room left shared out: equal widths cut "Subheading" off. -->
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">32dp</item>
+        <item name="android:layout_weight">1</item>
+        <item name="android:paddingStart">6dp</item>
+        <item name="android:paddingEnd">6dp</item>
+        <item name="android:gravity">center</item>
+        <item name="android:maxLines">1</item>
+        <item name="android:textSize">13sp</item>
+        <item name="android:textColor">@color/size_label</item>
+        <item name="android:background">@drawable/panel_chip_background</item>
+    </style>
+
     <style name="PanelGroup">
         <item name="android:layout_height">40dp</item>
         <item name="android:orientation">horizontal</item>

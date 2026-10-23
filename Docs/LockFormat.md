@@ -5,8 +5,9 @@ this format, and the test files in `SyncedNotesCore/Fixtures/` are written by th
 pin it down: a reader written from this file alone must open them. Nothing here may change
 silently: a change is a new format version.
 
-It is written for more than one device holding the same vault, so that a second device of
-the user's could one day read the notes; today only the Mac app reads and writes it.
+It is written for more than one device holding the same vault: since 2026-10-23 the Mac and a
+paired Android phone both read and write it, with the same code (`shared/core`), and sync
+carries locked items between them as they are ([`Sync.md`](Sync.md)).
 
 ## Overview
 

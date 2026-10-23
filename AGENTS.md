@@ -10,12 +10,12 @@ Since 2026-10-22 the Mac app is built without Xcode or Swift. The Swift app (`Sy
 
 - **Language / Runtime**: Kotlin 2.4 on the JVM (JDK 27 to build, a Temurin 25 runtime inside
   the app), Rust for the engine's fonts and drawing
-- **Windows**: Compose for Desktop 1.12 around the note; the note itself is the app's own
-  engine (`shared/engine`, `shared/glyphs`), shared with the phone app, never a text view of
-  the system's or Compose's
-- **Key dependencies**: SQLite3 Multiple Ciphers (`io.github.willena:sqlite-jdbc`, SQLCipher 4's
-  format), Bouncy Castle for Argon2id, protobuf-javalite for the note format; the JDK for
-  AES-GCM and HKDF
+- **Windows**: Compose for Desktop 1.12 around the note on the Mac; Android's own widgets,
+  built in code, on the phone (minSdk 28). The note itself is the app's own engine
+  (`shared/engine`, `shared/glyphs`), never a text view of the system's or Compose's
+- **Key dependencies**: SQLite3 Multiple Ciphers (`io.github.willena:sqlite-jdbc`) on the Mac and
+  SQLCipher for Android on the phone, both SQLCipher 4's format; Bouncy Castle for Argon2id;
+  protobuf-javalite for the note format and sync; the platform's own AES-GCM, ECDH and ECDSA
 - **Build**: Gradle in `mac/` (`:app`, with `:core` and `:engine` from `shared/`) and in
   `android/` (the phone app, on the same `shared/` modules)
 
@@ -26,6 +26,9 @@ cd mac && ./gradlew test                    # the lock, store, backups, engine, 
 cd mac && ./gradlew :app:run                # the app on try-out notes, SyncedNotes-Try
 cd mac && ./gradlew :app:makeTryNotes       # made-up notes for that, then :app:run -PtryUnlock
 cd mac && ./gradlew :app:signApp            # the signed, sandboxed SyncedNotes.app
+cd android && ./gradlew :app:assembleDebug   # the phone app (ANDROID_HOME, NDK 28.2)
+cd android && ./gradlew :app:assembleTryout  # "SyncedNotes Try": beside the real app, made-up notes only
+cd shared/glyphs && cargo test --release     # the Rust half
 cd SyncedNotesCore/Proto && protoc --java_out=lite:../../shared/core/Generated note.proto sync.proto
 ```
 
@@ -34,7 +37,8 @@ Installing: see the README. Keep exactly one copy of the app on the Mac,
 
 ## Rules
 
-- **Notes never leave the Mac, not even to Apple.** No iCloud, no Siri, Apple Intelligence or
+- **Notes never leave the user's Mac and phone, not even to Apple or Google.** Sync goes
+  straight between the two over the local network ([`Docs/Sync.md`](Docs/Sync.md)). No iCloud, no Siri, Apple Intelligence or
   Writing Tools, no Handoff or Universal Clipboard, no Spotlight indexing, no crash reporting or
   analytics. A system feature stays off until it is confirmed to keep data on the device, and it
   is turned off in code rather than left to the defaults. Everything about it lives in
@@ -70,4 +74,6 @@ Installing: see the README. Keep exactly one copy of the app on the Mac,
 - **Nothing secret enters the repo.** `.snbackup` and `.snx` files and anything with a key are
   ignored by git. Test data is invented and guards nothing.
 - **Tests never touch the real notes or the real clipboard.** Use a temporary folder and
-  `Pasteboard.private()`; a run from the build uses `SyncedNotes-Try`, never `SyncedNotes`.
+  `Pasteboard.private()`; a run from the build uses `SyncedNotes-Try`, never `SyncedNotes`. On
+  the phone, try changes in the Tryout build, never in the real app, and never open its photo
+  picker or capture its screen.

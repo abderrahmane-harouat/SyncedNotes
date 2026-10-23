@@ -2,6 +2,65 @@
 
 How SyncedNotes is built, and why.
 
+## One engine, one core, two apps
+
+Both apps are Kotlin around the same code, kept in `shared/` and built by both `mac/` and
+`android/` as modules rather than copies:
+
+- `shared/engine` and `shared/glyphs`: the note engine. Kotlin holds the document, layout,
+  selection, undo, input, Find and pictures' places; Rust (no crates) parses fonts, shapes with
+  OpenType, rasterizes, decodes colour emoji and composites. It never asks the system for a
+  font or a text view, so a note looks and behaves the same on both.
+- `shared/core`: the lock, the store, backups, the note format and sync. The store reaches its
+  SQLCipher-format database through a small interface (`Sql.kt`): JDBC on the Mac, SQLCipher
+  for Android on the phone, since neither driver exists on the other.
+
+Each build writes the shared modules' output to a folder of its own
+(`build/<build's name>`): sharing one, the phone's build once rewrote classes the running Mac
+app was loading.
+
+## The phone app: Android's widgets around the engine, after Samsung Notes
+
+The phone's note is one `View` that hands touches and the keyboard's `InputConnection` to the
+engine and puts its pixels on screen; nothing of Android's text system is used. Everything
+around the note is Android's own widgets built in code: the lock screen, the list, folders,
+the pairing screen, and Samsung Notes' toolbar and Text options card. The same tools as the
+Mac's, and the same colours, so a note can be written alike on both.
+
+## Sync: the Mac's vault on the phone
+
+`Docs/Sync.md` is the contract. Two decisions shape it:
+
+- **Both devices hold the Mac's vault.** Pairing gives the phone the Mac's vault header, so
+  the same passphrase opens both and a note travels as the locked item it already is. A phone
+  with notes of its own locks them again under the Mac's vault, checked, as a passphrase change
+  is.
+- **One implementation of both sides.** The handshake, the session and the merge are in
+  `shared/core` (package `sync`), with only discovery per platform: Bonjour through `dns_sd`
+  over FFM on the Mac, Network Service Discovery on the phone. A test pairs a Mac and a phone
+  over loopback and syncs both ways.
+
+## Pictures and dividers are paragraphs
+
+A picture stands on a line of its own, as a divider does: a paragraph holding one U+FFFC,
+whose style names the picture by a handle the app gives out. Keeping them whole is one rule in
+the document, not one in each way of deleting: text split off or joined to such a paragraph
+never takes its style, so a Backspace from the keyboard, a selection deleted, or an input
+method's own deleting cannot leave a picture's style on text. Beside one, Backspace and Delete
+take it whole, and typing starts a line of its own.
+
+Pictures are decoded by the platform (Android's decoder, the JDK's ImageIO) at exactly the size
+they are shown, off the drawing thread, and handed to the Rust half, which only copies their
+pixels: no image format's code is in the engine. Every picture is written afresh before it is
+kept, which bounds its size and drops a photo's metadata.
+
+## Find in Note
+
+Matches are found in a copy of the text folded one character for one (lower case, accents
+off), so an offset found there is the offset in the note. They are drawn behind the text and
+are not part of the note: nothing is saved or undone. A match is a solid box with an edge; its
+colours are also highlights a note can have, and the edge is what tells the two apart.
+
 ## The Mac app since 2026-10-22: Compose around the note engine
 
 The Mac app is built without Xcode or Swift (`mac/`). Its windows are Compose for Desktop on
@@ -27,7 +86,7 @@ checklist, divider), lists in levels with an ID and a start, alignment and direc
 spacing; sizes are relative to the role's, as stored. `NoteFormat` reads a note into the
 engine and writes it back. A note opens for editing only if that round trip gives back
 exactly the stored note (`NoteFormat.canEdit`): anything the engine does not model yet, a
-picture or a table, makes the note read-only rather than something a save would drop. Each
+picture amid text or a table, makes the note read-only rather than something a save would drop. Each
 text colour read is kept with its exact floats, since eight bits a channel cannot hold them.
 
 **What AppKit used to do for the privacy rule is done by hand** (`KeepOnThisMac.kt`), through

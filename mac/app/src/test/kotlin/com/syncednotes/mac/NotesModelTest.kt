@@ -202,4 +202,17 @@ class NotesModelTest {
         assertTrue(again.unlock(passphrase))
         assertEquals(listOf("Kept"), again.summaries.map { it.title })
     }
+
+    @Test
+    fun anExportedBackupIsWrittenToTheFileChosenAndNothingElseBesideIt() {
+        val model = unlocked()
+        model.newNote()
+        composer.type("Backed up", 0)
+        val folder = Files.createTempDirectory("syncednotes-export-").toFile()
+        val file = folder.resolve("made-up.snbackup")
+        model.exportBackup(file)
+        assertNull(model.problem)
+        assertEquals(listOf("made-up.snbackup"), folder.list()!!.toList())
+        assertTrue(model.notice!!.startsWith("Backed up 1 note"))
+    }
 }

@@ -147,8 +147,9 @@ private fun FrameWindowScope.exportBackup(model: NotesModel) {
     dialog.file = model.backupFileName()
     dialog.isVisible = true
     val name = dialog.file ?: return
-    val file = File(dialog.directory, if (name.endsWith(".${NotesModel.BACKUP_EXTENSION}")) name else "$name.${NotesModel.BACKUP_EXTENSION}")
-    model.exportBackup(file)
+    // Exactly the file chosen: the sandbox opens that one to the app, and a name changed here
+    // (an extension added) would be another file, which it refuses.
+    model.exportBackup(File(dialog.directory, name))
 }
 
 private fun FrameWindowScope.importBackup(model: NotesModel) {

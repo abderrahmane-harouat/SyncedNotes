@@ -610,16 +610,27 @@ class NotesModel(private val home: File, private val scope: CoroutineScope) {
     /** The name a new backup file is offered under. */
     fun backupFileName(): String = "SyncedNotes Backup ${LocalDate.now()}.$BACKUP_EXTENSION"
 
-    /** Writes a backup of every note to [file]. */
+    /**
+     * Writes a backup of every note to [file], then reads it back and opens it with this vault's
+     * keys before saying it worked.
+     *
+     * Written straight into the file chosen, not beside it and moved into place: the sandbox
+     * lets the app write the one file picked in the Save dialog, and nothing else in that
+     * folder, so a file of its own beside it was refused and no backup was made.
+     */
     fun exportBackup(file: File) {
         saveNow()
         val store = store ?: return
         try {
-            NoteStore.writeAtomically(file, Backup.make(store))
+            val bytes = Backup.make(store)
+            java.nio.file.Files.write(file.toPath(), bytes)
+            val written = file.readBytes()
+            if (!written.contentEquals(bytes)) throw Message("what was written differs from the backup")
+            Backup.open(written, store.vault)
             val count = store.summaries().size
             notice = "Backed up $count ${if (count == 1) "note" else "notes"} to “${file.name}”."
         } catch (e: Exception) {
-            problem = "The backup could not be written: ${e.message}"
+            problem = "The backup could not be written to “${file.name}”: ${e.message ?: e.javaClass.simpleName}"
         }
     }
 

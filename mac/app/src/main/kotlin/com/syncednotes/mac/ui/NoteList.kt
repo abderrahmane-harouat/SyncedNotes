@@ -14,6 +14,7 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -63,6 +64,8 @@ fun NoteList(
     model: NotesModel,
     onConfirmDelete: (Set<Id>) -> Unit,
     onConfirmEmptyTrash: () -> Unit,
+    sidebarShown: Boolean,
+    onToggleSidebar: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     val c = colors
@@ -103,7 +106,9 @@ fun NoteList(
     }
 
     Column(modifier.fillMaxHeight().background(c.window)) {
-        Row(Modifier.fillMaxWidth().height(HEADER_HEIGHT).padding(start = 16.dp, end = 8.dp, top = TITLE_BAR), verticalAlignment = Alignment.CenterVertically) {
+        Row(Modifier.fillMaxWidth().height(HEADER_HEIGHT).padding(start = 8.dp, end = 8.dp, top = TITLE_BAR), verticalAlignment = Alignment.CenterVertically) {
+            ToolbarButton(Icons.sidebar, if (sidebarShown) "Hide Sidebar (⌃⌘S)" else "Show Sidebar (⌃⌘S)", onToggleSidebar)
+            Spacer(Modifier.width(4.dp))
             BasicText(listTitle(model), Modifier.weight(1f), style = MacType.headline.copy(color = c.text), maxLines = 1, overflow = TextOverflow.Ellipsis)
             ToolbarButton(Icons.lock, "Lock Notes (⌃⌘L)", model::lock)
             // In plain sight beside Lock, not only in menus: from Settings and the File menu
@@ -227,10 +232,9 @@ private fun NoteRow(
             Modifier.fillMaxWidth().clip(RoundedCornerShape(7.dp)).background(background).padding(horizontal = 10.dp, vertical = 7.dp),
             verticalArrangement = Arrangement.spacedBy(2.dp),
         ) {
-            BasicText(
+            TruncatedText(
                 note.title.ifEmpty { "New Note" },
                 style = MacType.bodyStrong.copy(color = if (note.title.isEmpty() && !lit) c.secondaryText else primary),
-                maxLines = 1, overflow = TextOverflow.Ellipsis,
             )
             val folder = note.folder?.takeIf { model.place == Place.AllNotes }?.let { "  ·  " + model.nameOf(it) } ?: ""
             BasicText(

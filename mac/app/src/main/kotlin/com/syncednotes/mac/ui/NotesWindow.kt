@@ -17,6 +17,18 @@ import com.syncednotes.core.Id
 import com.syncednotes.mac.Appearance
 import com.syncednotes.mac.Editor
 import com.syncednotes.mac.NotesModel
+import com.syncednotes.mac.WindowLayout
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandHorizontally
+import androidx.compose.animation.shrinkHorizontally
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.draggable
+import androidx.compose.foundation.gestures.rememberDraggableState
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.input.pointer.PointerIcon
+import androidx.compose.ui.input.pointer.pointerHoverIcon
+import androidx.compose.ui.platform.LocalDensity
+import java.awt.Cursor
 
 /** What the window asks before doing something that cannot be undone. */
 sealed interface Question {
@@ -30,6 +42,7 @@ sealed interface Question {
 fun NotesWindow(
     model: NotesModel,
     editor: Editor,
+    layout: WindowLayout,
     appearance: Appearance,
     onAppearance: (Appearance) -> Unit,
     onExport: () -> Unit,
@@ -40,20 +53,40 @@ fun NotesWindow(
     Box(Modifier.fillMaxSize().background(c.window)) {
         when (val phase = model.phase) {
             is NotesModel.Phase.Locked -> LockScreen(model, phase.firstRun)
-            NotesModel.Phase.Unlocked -> Row(Modifier.fillMaxSize()) {
-                Sidebar(
-                    model, onDeleteFolder = { question = Question.DeleteFolder(it) }, onExport = onExport, onImport = onImport,
-                    modifier = Modifier.width(214.dp),
+            NotesModel.Phase.Unlocked -> Box(Modifier.fillMaxSize()) {
+                Row(Modifier.fillMaxSize()) {
+                    // The sidebar slides out and back in, keeping its width.
+                    AnimatedVisibility(layout.sidebarShown, enter = expandHorizontally(), exit = shrinkHorizontally()) {
+                        Row {
+                            Sidebar(
+                                model, onDeleteFolder = { question = Question.DeleteFolder(it) }, onExport = onExport, onImport = onImport,
+                                modifier = Modifier.width(layout.sidebarWidth.dp),
+                            )
+                            Divider()
+                        }
+                    }
+                    NoteList(
+                        model,
+                        onConfirmDelete = { question = Question.DeleteNotes(it) },
+                        onConfirmEmptyTrash = { question = Question.EmptyTrash },
+                        sidebarShown = layout.sidebarShown,
+                        onToggleSidebar = layout::toggleSidebar,
+                        modifier = Modifier.width(layout.listWidth.dp),
+                    )
+                    Divider()
+                    EditorPane(model, editor, appearance, onAppearance, onConfirmDelete = { question = Question.DeleteNotes(it) }, modifier = Modifier.weight(1f))
+                }
+                // The edges between the columns can be dragged. Their handles lie over the lines,
+                // wider than them, so they are easy to catch.
+                val sidebarEdge = if (layout.sidebarShown) layout.sidebarWidth else 0f
+                if (layout.sidebarShown) {
+                    ColumnEdge(sidebarEdge, onDrag = { layout.sidebarWidth = (layout.sidebarWidth + it).coerceIn(WindowLayout.SIDEBAR_MIN, WindowLayout.SIDEBAR_MAX) }, onDone = layout::save)
+                }
+                ColumnEdge(
+                    sidebarEdge + (if (layout.sidebarShown) 1f else 0f) + layout.listWidth,
+                    onDrag = { layout.listWidth = (layout.listWidth + it).coerceIn(WindowLayout.LIST_MIN, WindowLayout.LIST_MAX) },
+                    onDone = layout::save,
                 )
-                Divider()
-                NoteList(
-                    model,
-                    onConfirmDelete = { question = Question.DeleteNotes(it) },
-                    onConfirmEmptyTrash = { question = Question.EmptyTrash },
-                    modifier = Modifier.width(272.dp),
-                )
-                Divider()
-                EditorPane(model, editor, appearance, onAppearance, onConfirmDelete = { question = Question.DeleteNotes(it) }, modifier = Modifier.weight(1f))
             }
         }
 
@@ -99,3 +132,21 @@ fun NotesWindow(
 
 @Composable
 private fun Divider() = Box(Modifier.width(1.dp).fillMaxHeight().background(colors.separator))
+
+/** A handle over the line at [x] points from the left, which resizes the column on its left. */
+@Composable
+private fun ColumnEdge(x: Float, onDrag: (Float) -> Unit, onDone: () -> Unit) {
+    val density = LocalDensity.current.density
+    Box(
+        Modifier
+            .offset(x = (x - 4f).dp)
+            .width(8.dp)
+            .fillMaxHeight()
+            .pointerHoverIcon(PointerIcon(Cursor(Cursor.E_RESIZE_CURSOR)))
+            .draggable(
+                rememberDraggableState { pixels -> onDrag(pixels / density) },
+                Orientation.Horizontal,
+                onDragStopped = { onDone() },
+            ),
+    )
+}

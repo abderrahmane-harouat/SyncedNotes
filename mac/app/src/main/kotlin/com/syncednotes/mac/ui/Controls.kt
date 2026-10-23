@@ -359,3 +359,16 @@ fun MenuPopup(expanded: Boolean, onDismiss: () -> Unit, items: List<MenuItem>, o
         }
     }
 }
+
+/**
+ * One line of text, cut short with an ellipsis when it does not fit, and then shown whole in a
+ * tooltip when the pointer rests on it.
+ */
+@Composable
+fun TruncatedText(text: String, modifier: Modifier = Modifier, style: TextStyle) {
+    var cut by remember(text) { mutableStateOf(false) }
+    val line = @Composable {
+        BasicText(text, style = style, maxLines = 1, overflow = TextOverflow.Ellipsis, onTextLayout = { cut = it.hasVisualOverflow })
+    }
+    Box(modifier) { if (cut) Tooltip(text) { line() } else line() }
+}

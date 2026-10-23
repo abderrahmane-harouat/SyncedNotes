@@ -190,21 +190,24 @@ private fun FolderRow(model: NotesModel, folder: NoteStore.Folder, onDeleteFolde
     var menuAt by remember { mutableStateOf<Offset?>(null) }
     Box(Modifier.onRightClick { menuAt = it }) {
         SidebarRow(model.place == Place.InFolder(folder.id), { model.show(Place.InFolder(folder.id)) }) {
-            Spacer(Modifier.width((depth * 14).dp))
-            Box(
-                Modifier.size(12.dp).clickable(enabled = hasChildren) {
-                    model.expandedFolders = if (expanded) model.expandedFolders.minusElement(folder.id) else model.expandedFolders.plusElement(folder.id)
-                },
-                contentAlignment = Alignment.Center,
-            ) {
-                if (hasChildren) Icon(if (expanded) Icons.chevronDown else Icons.chevronRight, c.secondaryText, size = 11.dp)
-            }
-            Icon(Icons.folder, c.accent, size = 16.dp)
+            // A top-level folder lines up with All Notes; each level inside goes 16 points in.
+            Icon(Icons.folder, c.accent, Modifier.padding(start = (depth * 16).dp), size = 16.dp)
             if (model.renamingFolder == folder.id) {
                 NameField(folder.name, onDone = { model.renameFolder(folder.id, it) }, onCancel = { model.renamingFolder = null }, modifier = Modifier.weight(1f))
             } else {
-                BasicText(folder.name, Modifier.weight(1f), style = MacType.body.copy(color = c.text), maxLines = 1, overflow = TextOverflow.Ellipsis)
+                TruncatedText(folder.name, Modifier.weight(1f), MacType.body.copy(color = c.text))
                 Count(model.noteCounts[folder.id] ?: 0)
+            }
+            // The arrow that opens a folder's folders, at the row's end, as in the Mac's sidebars.
+            if (hasChildren) {
+                Box(
+                    Modifier.size(16.dp).clip(RoundedCornerShape(4.dp)).clickable {
+                        model.expandedFolders = if (expanded) model.expandedFolders.minusElement(folder.id) else model.expandedFolders.plusElement(folder.id)
+                    },
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(if (expanded) Icons.chevronDown else Icons.chevronRight, c.secondaryText, size = 11.dp)
+                }
             }
         }
         MenuPopup(
@@ -249,9 +252,7 @@ private fun NewFolderRow(model: NotesModel, parent: Id?) {
     val c = colors
     val depth = parent?.let { p -> model.folders.firstOrNull { it.id == p }?.let { model.depthOf(it) + 1 } } ?: 0
     SidebarRow(false, {}) {
-        Spacer(Modifier.width((depth * 14).dp))
-        Spacer(Modifier.size(12.dp))
-        Icon(Icons.folder, c.accent, size = 16.dp)
+        Icon(Icons.folder, c.accent, Modifier.padding(start = (depth * 16).dp), size = 16.dp)
         NameField("", onDone = model::createFolder, onCancel = model::cancelNewFolder, modifier = Modifier.weight(1f))
     }
 }

@@ -106,6 +106,7 @@ fun main() {
                 KeepOnThisMac.setAppearance(if (appearance == Appearance.SYSTEM) null else appearance == Appearance.DARK)
             }
             val choose: (Appearance) -> Unit = { appearance = it; it.save() }
+            val layout = remember { WindowLayout() }
             val editor = remember(scale, dark) { Editor(scale, dark) }
             LaunchedEffect(editor) { model.editorAppeared(editor.composer) }
             // Typed text reaches the note this way (see MacTextInput).
@@ -131,10 +132,10 @@ fun main() {
                     SelfTest.clickAndType(window, window.width - 300, 200, text)
                 }
             }
-            Menus(model, editor, appearance, choose)
+            Menus(model, editor, layout, appearance, choose)
             CompositionLocalProvider(LocalClipboard provides MacOnlyClipboard, LocalClipboardManager provides MacOnlyClipboard) {
                 MacTheme(dark) {
-                    NotesWindow(model, editor, appearance, choose, onExport = { exportBackup(model) }, onImport = { importBackup(model) })
+                    NotesWindow(model, editor, layout, appearance, choose, onExport = { exportBackup(model) }, onImport = { importBackup(model) })
                 }
             }
         }
@@ -159,7 +160,7 @@ private fun FrameWindowScope.importBackup(model: NotesModel) {
 
 /** The File and Format menus, with the Swift app's shortcuts. */
 @androidx.compose.runtime.Composable
-private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor, appearance: Appearance, onAppearance: (Appearance) -> Unit) {
+private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor, layout: WindowLayout, appearance: Appearance, onAppearance: (Appearance) -> Unit) {
     val unlocked = model.phase == NotesModel.Phase.Unlocked
     val editing = unlocked && model.document?.let { it.editable && !it.inTrash } == true
     val c = editor.composer
@@ -180,6 +181,13 @@ private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor, appearance
             Item("Lock Notes", shortcut = KeyShortcut(Key.L, meta = true, ctrl = true), enabled = unlocked, onClick = model::lock)
         }
         Menu("View") {
+            Item(
+                if (layout.sidebarShown) "Hide Sidebar" else "Show Sidebar",
+                shortcut = KeyShortcut(Key.S, meta = true, ctrl = true),
+                enabled = unlocked,
+                onClick = layout::toggleSidebar,
+            )
+            Separator()
             Menu("Appearance") {
                 for (choice in Appearance.entries) {
                     RadioButtonItem(choice.title, selected = appearance == choice, onClick = { onAppearance(choice) })

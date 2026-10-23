@@ -29,6 +29,7 @@ fun main() {
         val recipes = store.createFolder("Recipes")
         val work = store.createFolder("Work")
         store.createFolder("Meetings", work)
+        store.createFolder("Ideas for the garden, the kitchen and the long summer holidays")
         var t = Instant.now().minusSeconds(86_400 * 3)
         fun save(note: Note, folder: com.syncednotes.core.Id? = null) {
             t = t.plusSeconds(3_600)

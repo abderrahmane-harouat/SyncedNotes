@@ -11,12 +11,13 @@ Since 2026-10-22 the Mac app is built without Xcode or Swift. The Swift app (`Sy
 - **Language / Runtime**: Kotlin 2.4 on the JVM (JDK 27 to build, a Temurin 25 runtime inside
   the app), Rust for the engine's fonts and drawing
 - **Windows**: Compose for Desktop 1.12 around the note; the note itself is the app's own
-  engine (`android/engine`, `android/glyphs`), shared with the phone app, never a text view of
+  engine (`shared/engine`, `shared/glyphs`), shared with the phone app, never a text view of
   the system's or Compose's
 - **Key dependencies**: SQLite3 Multiple Ciphers (`io.github.willena:sqlite-jdbc`, SQLCipher 4's
   format), Bouncy Castle for Argon2id, protobuf-javalite for the note format; the JDK for
   AES-GCM and HKDF
-- **Build**: Gradle in `mac/` (`:app`, `:core`, and `:engine` from `android/engine`)
+- **Build**: Gradle in `mac/` (`:app`, with `:core` and `:engine` from `shared/`) and in
+  `android/` (the phone app, on the same `shared/` modules)
 
 ## Commands
 
@@ -25,7 +26,7 @@ cd mac && ./gradlew test                    # the lock, store, backups, engine, 
 cd mac && ./gradlew :app:run                # the app on try-out notes, SyncedNotes-Try
 cd mac && ./gradlew :app:makeTryNotes       # made-up notes for that, then :app:run -PtryUnlock
 cd mac && ./gradlew :app:signApp            # the signed, sandboxed SyncedNotes.app
-cd SyncedNotesCore/Proto && protoc --java_out=lite:../../mac/core/Generated note.proto
+cd SyncedNotesCore/Proto && protoc --java_out=lite:../../shared/core/Generated note.proto
 ```
 
 Installing: see the README. Keep exactly one copy of the app on the Mac,

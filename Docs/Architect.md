@@ -6,9 +6,10 @@ How SyncedNotes is built, and why.
 
 The Mac app is built without Xcode or Swift (`mac/`). Its windows are Compose for Desktop on
 the JVM; the note is drawn and edited by the app's own engine, the same one as the phone
-app's (`android/engine` in Kotlin: text, layout, selection, undo, input; `android/glyphs` in
-Rust: font parsing, shaping, rasterizing). The Mac build includes `android/engine` as a module
-of its own rather than a copy, so both apps type, select and draw the same.
+app's (`shared/engine` in Kotlin: text, layout, selection, undo, input; `shared/glyphs` in
+Rust: font parsing, shaping, rasterizing). Both builds include `shared/engine` and
+`shared/core` as modules rather than copies, so both apps type, select and draw the same, and
+lock and store notes the same.
 
 **The engine owns the text**, as the text view did before. The window hands it a note only
 when another is chosen (`NotesModel.showInEditor`), and reads it back only to save.

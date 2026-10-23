@@ -22,16 +22,18 @@ java {
 dependencies {
     implementation(project(":engine"))
     implementation(project(":core"))
+    // The store's way into its database on the Mac (see Sql.kt in shared/core).
+    implementation("io.github.willena:sqlite-jdbc:3.53.4.0")
     implementation(compose.desktop.currentOs)
     testImplementation(kotlin("test"))
 }
 
-val glyphsRelease = rootProject.layout.projectDirectory.dir("../android/glyphs/target/release")
+val glyphsRelease = rootProject.layout.projectDirectory.dir("../shared/glyphs/target/release")
 
 sourceSets {
     main {
         // The same font files as the phone, so a note looks the same on both.
-        resources.srcDir(rootProject.layout.projectDirectory.dir("../android/app/src/main/assets"))
+        resources.srcDir(rootProject.layout.projectDirectory.dir("../shared/assets"))
     }
 }
 

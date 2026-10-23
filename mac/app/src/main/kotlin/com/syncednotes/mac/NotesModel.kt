@@ -18,7 +18,7 @@ import com.syncednotes.core.vaultHeaderFile
 import com.syncednotes.engine.editor.Composer
 import com.syncednotes.engine.text.ParagraphStyle
 import com.syncednotes.engine.text.Role
-import com.syncednotes.mac.format.NoteFormat
+import com.syncednotes.core.NoteFormat
 import java.io.File
 import java.time.LocalDate
 import kotlinx.coroutines.CoroutineScope

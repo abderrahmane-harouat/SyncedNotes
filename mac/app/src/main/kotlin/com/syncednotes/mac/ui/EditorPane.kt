@@ -40,7 +40,7 @@ import com.syncednotes.mac.Appearance
 import com.syncednotes.mac.Editor
 import com.syncednotes.mac.NoteCanvas
 import com.syncednotes.mac.NotesModel
-import com.syncednotes.mac.format.NoteFormat
+import com.syncednotes.core.NoteFormat
 import com.syncednotes.mac.now
 import syncednotes.note.v1.Highlight
 

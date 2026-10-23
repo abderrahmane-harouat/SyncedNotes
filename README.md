@@ -9,7 +9,7 @@ passphrase only you know, and they never leave the Mac, not even to Apple.
 
 **Version 0.2.0, being rebuilt.** Version 0.1.0 was a SwiftUI app; since 2026-10-22 the Mac
 app is built without Xcode or Swift, in Kotlin, around the same note engine as the phone
-app (`android/engine`, with its Rust half in `android/glyphs`), with the same design, the same
+app (`shared/engine`, with its Rust half in `shared/glyphs`), with the same design, the same
 encrypted storage and the same backups. The Swift sources stay in the repo until the new app
 does everything they did. Not independently reviewed. What comes next is in
 [`TODO.md`](TODO.md).
@@ -118,9 +118,10 @@ rm -rf mac/app/build/compose/binaries/main/app/SyncedNotes.app
 | | |
 |---|---|
 | `mac/app` | The Mac app: Compose for Desktop windows around the note engine, the menus, and `KeepOnThisMac.kt` |
-| `mac/core` | Everything that is not on screen, tested from the terminal: the lock, the encrypted database, folders, backups, changing the passphrase |
-| `mac/core/Generated` | The note format's code, made from `SyncedNotesCore/Proto/note.proto` |
-| `android/engine`, `android/glyphs` | The note engine, shared with the phone app: text, layout and editing in Kotlin, fonts and drawing in Rust |
+| `shared/core` | Everything that is not on screen, for both apps, tested from the terminal: the lock, the encrypted database, folders, backups, changing the passphrase |
+| `shared/core/Generated` | The note format's code, made from `SyncedNotesCore/Proto/note.proto` |
+| `shared/engine`, `shared/glyphs` | The note engine, for both apps: text, layout and editing in Kotlin, fonts and drawing in Rust |
+| `shared/assets/fonts` | The fonts both apps ship |
 | `android/app` | The phone app |
 | `SyncedNotesCore/Proto/note.proto` | The note format |
 | `SyncedNotesCore/Fixtures/` | The lock's test files, written by the Swift app's lock code; the Kotlin lock must open them |
@@ -129,7 +130,7 @@ rm -rf mac/app/build/compose/binaries/main/app/SyncedNotes.app
 | `Privacy.md`, `TODO.md` | The privacy rule and how it is kept; what comes next |
 
 Dependencies, each pinned to one version: Compose for Desktop 1.12.2, SQLite3 Multiple
-Ciphers through `io.github.willena:sqlite-jdbc` 3.53.4.0 (SQLCipher 4's format), Bouncy Castle
+Ciphers through `io.github.willena:sqlite-jdbc` 3.53.4.0 on the Mac (SQLCipher 4's format), Bouncy Castle
 1.86 for Argon2id, and protobuf-javalite 4.36.2. Encryption itself uses the JDK's AES-256-GCM
 and HKDF.
 
@@ -139,8 +140,8 @@ and HKDF.
 cd mac && ./gradlew test
 ```
 
-The lock, the database, backups, folders, the Trash and changing the passphrase (`mac/core`,
-the Swift app's tests, ported), the note engine (`android/engine`), and the app: reading and
+The lock, the database, backups, folders, the Trash and changing the passphrase (`shared/core`,
+the Swift app's tests, ported), the note engine (`shared/engine`), and the app: reading and
 writing notes exactly, and the window's rules on the real engine and store (`mac/app`).
 
 ### Generated files
@@ -150,7 +151,7 @@ Never edited by hand. Made again with:
 ```bash
 # The note format's Java code, after a change to note.proto (protoc 36.2, to match
 # protobuf-javalite 4.36.2):
-cd SyncedNotesCore/Proto && protoc --java_out=lite:../../mac/core/Generated note.proto
+cd SyncedNotesCore/Proto && protoc --java_out=lite:../../shared/core/Generated note.proto
 ```
 
 The lock's test files were written by the Swift app's lock code (`swift run make-fixtures`);

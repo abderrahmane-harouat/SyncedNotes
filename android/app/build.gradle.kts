@@ -16,6 +16,9 @@ android {
         versionName = "0.1.0"
     }
 
+    // The fonts are the Mac's too; one copy in shared/assets serves both.
+    sourceSets["main"].assets.directories.add("../../shared/assets")
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -33,7 +36,7 @@ dependencies {
     implementation(project(":engine"))
 }
 
-// The Rust half (android/glyphs) is built with the NDK's linker for each ABI we ship, into a
+// The Rust half (shared/glyphs) is built with the NDK's linker for each ABI we ship, into a
 // directory AGP packages as native libraries.
 abstract class CargoAndroid : DefaultTask() {
     @get:InputFiles abstract val sources: ConfigurableFileCollection
@@ -59,7 +62,7 @@ abstract class CargoAndroid : DefaultTask() {
     }
 }
 
-val glyphsDir = rootProject.layout.projectDirectory.dir("glyphs")
+val glyphsDir = rootProject.layout.projectDirectory.dir("../shared/glyphs")
 val cargoAndroid = tasks.register<CargoAndroid>("cargoAndroid") {
     sources.from(glyphsDir.dir("src"), glyphsDir.file("Cargo.toml"))
     crateDir.set(glyphsDir)

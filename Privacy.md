@@ -62,8 +62,8 @@ or Swift (`mac/`, see the README):
 
 ## The app
 
-The note is drawn by the app's own engine (`android/engine`, with its Rust half in
-`android/glyphs`), not by any text view of the system's: macOS gets keystrokes and shows
+The note is drawn by the app's own engine (`shared/engine`, with its Rust half in
+`shared/glyphs`), not by any text view of the system's: macOS gets keystrokes and shows
 pixels, and there is no text view for Writing Tools, Look Up, Services, spelling or
 autocorrect to attach to. The window around it is Compose for Desktop, on Java's AWT.
 

@@ -10,6 +10,7 @@ notes.json
 # Build output and tooling noise.
 build/
 .build/
+shared/glyphs/target/
 .swiftpm/
 DerivedData/
 xcuserdata/

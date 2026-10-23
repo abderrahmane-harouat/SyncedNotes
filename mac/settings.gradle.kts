@@ -22,10 +22,11 @@ dependencyResolutionManagement {
 
 rootProject.name = "SyncedNotesMac"
 
-// The note canvas is the Android app's own engine, shared rather than copied: one engine
-// types, selects and draws the same on the phone and on the Mac.
+// The engine, the lock and the store are the phone's too, shared rather than copied: one
+// engine types, selects and draws the same on both, and one lock and store read the same notes.
 include(":engine")
-project(":engine").projectDir = file("../android/engine")
-
+project(":engine").projectDir = file("../shared/engine")
 include(":core")
+project(":core").projectDir = file("../shared/core")
+
 include(":app")

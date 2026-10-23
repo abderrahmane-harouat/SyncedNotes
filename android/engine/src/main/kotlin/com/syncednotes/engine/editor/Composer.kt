@@ -72,6 +72,16 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             host.requestFrame()
         }
 
+    /**
+     * Shown faintly while the note is empty, where its first line will be ("Title"), so an
+     * empty new note reads as one waiting to be written rather than as nothing.
+     */
+    var placeholder: String? = null
+        set(value) {
+            field = value
+            host.requestFrame()
+        }
+
     private var viewWidth = 0
     private var viewHeight = 0
     private var insetTop = 0f
@@ -1158,6 +1168,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         list.reset()
         list.rect(0f, 0f, viewWidth.toFloat(), viewHeight.toFloat(), style.background)
         if (viewWidth == 0 || viewHeight == 0) return
+        drawPlaceholder(list)
         val first = layout.paragraphAtY(scrollY - style.paddingTop - insetTop)
         for (p in first until document.paragraphCount) {
             val top = originY + layout.paragraphTop(p)
@@ -1322,6 +1333,25 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         if (!done) return color
         val alpha = ((color ushr 24) * style.checkedTextAlpha).toInt()
         return (alpha shl 24) or (color and 0xFFFFFF)
+    }
+
+    private fun drawPlaceholder(list: DrawList) {
+        val text = placeholder ?: return
+        if (document.length != 0 || text.isEmpty()) return
+        val pl = layout.paragraph(0)
+        val size = pl.runs.sizes[0]
+        val run = layout.markerRun(text, size)
+        var x = originX + if (pl.rtl) pl.lineRight(0) - run.advances.sum() else pl.lineLeft(0)
+        val y = originY + pl.baseline(0)
+        for (i in 0 until run.count) {
+            if (i == glyphIds.size) growGlyphScratch()
+            glyphIds[i] = run.glyphs[i]
+            glyphXs[i] = x + run.offsetsX[i]
+            glyphYs[i] = y + run.offsetsY[i]
+            x += run.advances[i]
+        }
+        val faint = ((style.textColor ushr 24) * 0.3f).toInt() shl 24 or (style.textColor and 0xFFFFFF)
+        if (run.count > 0) list.glyphs(run.fontIds[0], size, faint, run.count, glyphIds, glyphXs, glyphYs)
     }
 
     /**

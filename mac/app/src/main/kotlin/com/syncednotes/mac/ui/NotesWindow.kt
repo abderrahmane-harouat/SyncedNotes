@@ -43,7 +43,7 @@ fun NotesWindow(
             NotesModel.Phase.Unlocked -> Row(Modifier.fillMaxSize()) {
                 Sidebar(
                     model, onDeleteFolder = { question = Question.DeleteFolder(it) }, onExport = onExport, onImport = onImport,
-                    appearance = appearance, onAppearance = onAppearance, modifier = Modifier.width(214.dp),
+                    modifier = Modifier.width(214.dp),
                 )
                 Divider()
                 NoteList(
@@ -53,7 +53,7 @@ fun NotesWindow(
                     modifier = Modifier.width(272.dp),
                 )
                 Divider()
-                EditorPane(model, editor, onConfirmDelete = { question = Question.DeleteNotes(it) }, modifier = Modifier.weight(1f))
+                EditorPane(model, editor, appearance, onAppearance, onConfirmDelete = { question = Question.DeleteNotes(it) }, modifier = Modifier.weight(1f))
             }
         }
 

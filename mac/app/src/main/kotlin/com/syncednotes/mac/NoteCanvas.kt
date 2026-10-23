@@ -45,7 +45,7 @@ class Editor(scale: Float, dark: Boolean) : ComposerHost {
     var format: Composer.FormatState? by mutableStateOf(null)
         private set
     val focus = FocusRequester()
-    val composer = Composer(AppFonts.family, EditorStyle.macLike(scale, dark), this)
+    val composer = Composer(AppFonts.family, EditorStyle.macLike(scale, dark), this).apply { placeholder = "Title" }
 
     override fun requestFrame() { frame++ }
     override fun showKeyboard() {}

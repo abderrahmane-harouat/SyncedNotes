@@ -17,6 +17,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -35,6 +36,7 @@ import com.syncednotes.engine.layout.roleScale
 import com.syncednotes.engine.text.CharStyle
 import com.syncednotes.engine.text.ListType
 import com.syncednotes.engine.text.Role
+import com.syncednotes.mac.Appearance
 import com.syncednotes.mac.Editor
 import com.syncednotes.mac.NoteCanvas
 import com.syncednotes.mac.NotesModel
@@ -44,11 +46,23 @@ import syncednotes.note.v1.Highlight
 
 /** The note being written, with its formatting tools; or what to do with several notes. */
 @Composable
-fun EditorPane(model: NotesModel, editor: Editor, onConfirmDelete: (Set<Id>) -> Unit, modifier: Modifier = Modifier) {
+fun EditorPane(
+    model: NotesModel,
+    editor: Editor,
+    appearance: Appearance,
+    onAppearance: (Appearance) -> Unit,
+    onConfirmDelete: (Set<Id>) -> Unit,
+    modifier: Modifier = Modifier,
+) {
     val c = colors
     val open = model.document
+    // A new note is ready to be written in at once, without a click first.
+    LaunchedEffect(model.notesCreated) {
+        if (model.notesCreated > 0) editor.focus.requestFocus()
+    }
     Column(modifier.fillMaxSize().background(c.window)) {
         Row(Modifier.fillMaxWidth().height(52.dp).padding(horizontal = 12.dp), verticalAlignment = Alignment.CenterVertically) {
+            AppearanceButton(appearance, onAppearance)
             Spacer(Modifier.weight(1f))
             if (open != null && open.editable && !open.inTrash) FormatToolbar(editor)
         }
@@ -170,6 +184,20 @@ private fun FormatToolbar(editor: Editor) {
 
 @Composable
 private fun Gap() = Spacer(Modifier.width(8.dp))
+
+/** Light, dark, or as the Mac is: across from the formatting tools, and in the View menu. */
+@Composable
+private fun AppearanceButton(appearance: Appearance, onAppearance: (Appearance) -> Unit) {
+    var menu by remember { mutableStateOf(false) }
+    Box {
+        ToolbarButton(Icons.appearance, "Appearance: ${appearance.title}", { menu = true })
+        MenuPopup(
+            menu, { menu = false },
+            Appearance.entries.map { choice -> MenuItem(choice.title, checked = appearance == choice) { onAppearance(choice) } },
+            offset = IntOffset(0, 60),
+        )
+    }
+}
 
 /** A toolbar button whose face is a letter or two. */
 @Composable

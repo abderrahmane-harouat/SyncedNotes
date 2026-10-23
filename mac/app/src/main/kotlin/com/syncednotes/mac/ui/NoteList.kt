@@ -18,6 +18,7 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -66,6 +67,15 @@ fun NoteList(
     val focus = remember { FocusRequester() }
     var listFocused by remember { mutableStateOf(false) }
     val state = rememberLazyListState()
+    // The open note is always in view: a new one, which goes at the top, or one chosen from
+    // the menus or the keyboard further down.
+    LaunchedEffect(model.document?.id, model.notesCreated) {
+        val index = model.summaries.indexOfFirst { it.id == model.document?.id }
+        if (index < 0) return@LaunchedEffect
+        val visible = state.layoutInfo.visibleItemsInfo
+        val shown = visible.any { it.index == index && it.offset >= 0 && it.offset + it.size <= state.layoutInfo.viewportEndOffset }
+        if (!shown) state.animateScrollToItem(index)
+    }
     // Where ⇧-click extends a selection from.
     var anchor by remember { mutableStateOf<Id?>(null) }
 
@@ -134,7 +144,10 @@ fun NoteList(
                 state = state,
             ) {
                 itemsIndexed(model.summaries, key = { _, note -> note.id.hex }) { _, note ->
-                    NoteRow(model, note, note.id in model.selection, listFocused, ::click, onConfirmDelete)
+                    // Rows slide into place as notes come, go and move, so a new one is seen arriving.
+                    Box(Modifier.animateItem()) {
+                        NoteRow(model, note, note.id in model.selection, listFocused, ::click, onConfirmDelete)
+                    }
                 }
             }
             if (model.summaries.isEmpty()) {

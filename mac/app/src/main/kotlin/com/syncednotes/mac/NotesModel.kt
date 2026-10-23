@@ -105,6 +105,9 @@ class NotesModel(private val home: File, private val scope: CoroutineScope) {
     /** What the list shows as selected. */
     val selection: Set<Id> get() = selectedNotes.ifEmpty { setOfNotNull(document?.id) }
     var changingPassphrase by mutableStateOf(false)
+    /** Goes up with each new note, so the window can put the caret in it and show it in the list. */
+    var notesCreated by mutableIntStateOf(0)
+        private set
     /** Shown to the user when something could not be saved or opened. */
     var problem: String? by mutableStateOf(null)
     /** Shown when something worked that the user should hear about: a backup made. */
@@ -276,6 +279,7 @@ class NotesModel(private val home: File, private val scope: CoroutineScope) {
         // Saved once so it shows in the list straight away; removed again if left empty.
         unsaved = true
         saveNow(force = true)
+        notesCreated++
     }
 
     /** Moves notes to the Trash, from where they can be restored for 30 days. */

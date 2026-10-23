@@ -36,6 +36,7 @@ import androidx.compose.ui.unit.sp
 import com.syncednotes.core.Id
 import com.syncednotes.engine.layout.roleScale
 import com.syncednotes.engine.text.CharStyle
+import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.ListType
 import com.syncednotes.engine.text.Role
 import com.syncednotes.mac.Appearance
@@ -65,15 +66,17 @@ fun EditorPane(
     }
     Column(modifier.fillMaxSize().background(c.window)) {
         Row(Modifier.fillMaxWidth().height(HEADER_HEIGHT).padding(start = 12.dp, end = 12.dp, top = TITLE_BAR), verticalAlignment = Alignment.CenterVertically) {
-            AppearanceButton(appearance, onAppearance)
-            model.sync?.let { SyncButton(model, it) }
-            // The tools keep to the right, and scroll sideways when the pane is too narrow for
-            // them all, as the phone's toolbar does, rather than running off its edge.
-            Box(Modifier.weight(1f).padding(start = 8.dp), contentAlignment = Alignment.CenterEnd) {
+            // The writing tools start where the note's text does, and scroll sideways when the
+            // pane is too narrow for them all, as the phone's toolbar does, rather than running
+            // off its edge. The app's own controls keep to the far side, apart from them.
+            Box(Modifier.weight(1f), contentAlignment = Alignment.CenterStart) {
                 if (open != null && open.editable && !open.inTrash) {
                     Box(Modifier.horizontalScroll(androidx.compose.foundation.rememberScrollState())) { FormatToolbar(editor, onInsertPicture) }
                 }
             }
+            Box(Modifier.padding(horizontal = 8.dp).size(1.dp, 20.dp).background(c.separator))
+            model.sync?.let { SyncButton(model, it) }
+            AppearanceButton(appearance, onAppearance)
         }
         when {
             open != null -> {
@@ -205,61 +208,99 @@ private fun moveItems(model: NotesModel, ids: Set<Id>): List<MenuItem> = buildLi
 }
 
 /**
- * The formatting tools above the note: text style and size, the three lists, the four
- * character styles, highlight and text colour, then undo and redo, the phone's toolbar's own
- * tools. The Aa menu holds the rest of what the phone's Text options card does, so every tool
- * is in reach on both. A button stays pressed while its style is on at the selection, as the
- * engine reports it, so it cannot disagree with the text.
+ * The formatting tools above the note, in groups that each do one kind of thing: text style
+ * and size; the three lists; the four character styles; text colour and highlight; code and
+ * pictures; undo and redo. They are the phone's toolbar's own tools; the Aa menu holds the
+ * rest of what its Text options card does, so every tool is in reach on both. A tool stays
+ * tinted while its style is on at the selection, as the engine reports it, so it cannot
+ * disagree with the text; one that opens a menu shows a chevron.
  */
 @Composable
 private fun FormatToolbar(editor: Editor, onInsertPicture: () -> Unit) {
     val c = colors
     val composer = editor.composer
     val state = editor.format
-    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(2.dp)) {
-        var styleMenu by remember { mutableStateOf(false) }
-        Box {
-            TextButton("Aa", "Text Style and Size", { styleMenu = true })
-            MenuPopup(styleMenu, { styleMenu = false }, textStyleItems(editor), offset = IntOffset(0, 60))
-        }
-        Gap()
-        ToolbarButton(Icons.bullets, "Bulleted List (⇧⌘7)", { composer.toggleList(ListType.BULLET, now()); editor.focus.requestFocus() }, selected = state?.list == ListType.BULLET)
-        ToolbarButton(Icons.numbers, "Numbered List (⇧⌘9)", { composer.toggleList(ListType.NUMBER, now()); editor.focus.requestFocus() }, selected = state?.list == ListType.NUMBER)
-        ToolbarButton(Icons.checklist, "Checklist (⇧⌘L)", { composer.toggleList(ListType.CHECKBOX, now()); editor.focus.requestFocus() }, selected = state?.list == ListType.CHECKBOX)
-        Gap()
-        TextButton("B", "Bold (⌘B)", { composer.toggle(CharStyle.BOLD, now()); editor.focus.requestFocus() }, selected = state?.bold == true, bold = true)
-        TextButton("I", "Italic (⌘I)", { composer.toggle(CharStyle.ITALIC, now()); editor.focus.requestFocus() }, selected = state?.italic == true, decoration = Decoration.ITALIC)
-        TextButton("U", "Underline (⌘U)", { composer.toggle(CharStyle.UNDERLINE, now()); editor.focus.requestFocus() }, selected = state?.underline == true, decoration = Decoration.UNDERLINE)
-        TextButton("S", "Strikethrough (⇧⌘X)", { composer.toggle(CharStyle.STRIKETHROUGH, now()); editor.focus.requestFocus() }, selected = state?.strikethrough == true, decoration = Decoration.STRIKETHROUGH)
-        Gap()
-        var highlightMenu by remember { mutableStateOf(false) }
-        Box {
-            ToolbarButton(Icons.highlighter, "Highlight", { highlightMenu = true }, selected = state?.highlight != null)
-            MenuPopup(highlightMenu, { highlightMenu = false }, highlightMenuItems(editor), offset = IntOffset(-60, 60))
-        }
-        var colorMenu by remember { mutableStateOf(false) }
-        Box {
-            Tooltip("Text Color") {
-                Box(
-                    Modifier.size(30.dp, 28.dp).clip(RoundedCornerShape(7.dp)).clickable { colorMenu = true },
-                    contentAlignment = Alignment.Center,
-                ) {
-                    Box(Modifier.size(14.dp).clip(CircleShape).background(state?.color?.let { Color(it) } ?: c.text))
+    fun act(run: () -> Unit): () -> Unit = {
+        run()
+        editor.focus.requestFocus()
+    }
+    Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        ToolGroup {
+            var styleMenu by remember { mutableStateOf(false) }
+            Box {
+                ToolButton("Text Style and Size", { styleMenu = true }, menu = true) { tint ->
+                    BasicText("Aa", style = MacType.body.copy(color = tint, fontSize = 15.sp, fontWeight = FontWeight.Medium))
                 }
+                MenuPopup(styleMenu, { styleMenu = false }, textStyleItems(editor), offset = IntOffset(0, 60))
             }
-            MenuPopup(colorMenu, { colorMenu = false }, colorItems(editor), offset = IntOffset(-120, 60))
         }
-        Gap()
-        // Samsung's attach button, for the one thing it attaches here: a picture.
-        ToolbarButton(Icons.photo, "Insert Picture (⇧⌘P)", onInsertPicture)
-        Gap()
-        ToolbarButton(Icons.undo, "Undo (⌘Z)", { composer.undo(now()); editor.focus.requestFocus() }, enabled = state?.canUndo == true)
-        ToolbarButton(Icons.redo, "Redo (⇧⌘Z)", { composer.redo(now()); editor.focus.requestFocus() }, enabled = state?.canRedo == true)
+        ToolGroup {
+            ToolbarButton(Icons.bullets, "Bulleted List (⇧⌘7)", act { composer.toggleList(ListType.BULLET, now()) }, selected = state?.list == ListType.BULLET)
+            ToolbarButton(Icons.numbers, "Numbered List (⇧⌘9)", act { composer.toggleList(ListType.NUMBER, now()) }, selected = state?.list == ListType.NUMBER)
+            ToolbarButton(Icons.checklist, "Checklist (⇧⌘L)", act { composer.toggleList(ListType.CHECKBOX, now()) }, selected = state?.list == ListType.CHECKBOX)
+        }
+        ToolGroup {
+            LetterButton("B", "Bold (⌘B)", act { composer.toggle(CharStyle.BOLD, now()) }, selected = state?.bold == true, bold = true)
+            LetterButton("I", "Italic (⌘I)", act { composer.toggle(CharStyle.ITALIC, now()) }, selected = state?.italic == true, decoration = Decoration.ITALIC)
+            LetterButton("U", "Underline (⌘U)", act { composer.toggle(CharStyle.UNDERLINE, now()) }, selected = state?.underline == true, decoration = Decoration.UNDERLINE)
+            LetterButton("S", "Strikethrough (⇧⌘X)", act { composer.toggle(CharStyle.STRIKETHROUGH, now()) }, selected = state?.strikethrough == true, decoration = Decoration.STRIKETHROUGH)
+        }
+        ToolGroup {
+            // An A over a bar of the colour the text has: the sign every editor uses for it,
+            // where a dot of colour alone said nothing about what it would colour.
+            var colorMenu by remember { mutableStateOf(false) }
+            Box {
+                ToolButton("Text Color", { colorMenu = true }, menu = true) { tint ->
+                    Swatch(state?.color?.let { Color(it) } ?: c.text) {
+                        BasicText("A", style = MacType.body.copy(color = tint, fontSize = 15.sp, fontWeight = FontWeight.SemiBold))
+                    }
+                }
+                MenuPopup(colorMenu, { colorMenu = false }, colorItems(editor), offset = IntOffset(-40, 60))
+            }
+            var highlightMenu by remember { mutableStateOf(false) }
+            Box {
+                ToolButton("Highlight", { highlightMenu = true }, selected = state?.highlight != null, menu = true) { tint ->
+                    // The bar shows the colour a highlight will be: the one there, or the last used.
+                    Swatch(Color(state?.highlight ?: lastHighlight).copy(alpha = 1f)) { Icon(Icons.marker, tint, size = 15.dp) }
+                }
+                MenuPopup(highlightMenu, { highlightMenu = false }, highlightMenuItems(editor), offset = IntOffset(-40, 60))
+            }
+        }
+        ToolGroup {
+            var codeMenu by remember { mutableStateOf(false) }
+            Box {
+                ToolbarButton(Icons.code, "Code Block", { codeMenu = true }, selected = state?.role == Role.CODE_BLOCK, menu = true)
+                MenuPopup(codeMenu, { codeMenu = false }, codeItems(editor), offset = IntOffset(-40, 60))
+            }
+            // Samsung's attach button, for the one thing it attaches here: a picture.
+            ToolbarButton(Icons.photo, "Insert Picture (⇧⌘P)", onInsertPicture)
+        }
+        ToolGroup {
+            ToolbarButton(Icons.undo, "Undo (⌘Z)", act { composer.undo(now()) }, enabled = state?.canUndo == true)
+            ToolbarButton(Icons.redo, "Redo (⇧⌘Z)", act { composer.redo(now()) }, enabled = state?.canRedo == true)
+        }
     }
 }
 
+/** A tool's face over a short bar of [color]: what colour the tool will give. */
 @Composable
-private fun Gap() = Spacer(Modifier.width(8.dp))
+private fun Swatch(color: Color, face: @Composable () -> Unit) {
+    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+        Box(Modifier.height(17.dp), contentAlignment = Alignment.Center) { face() }
+        Box(Modifier.size(14.dp, 3.dp).clip(RoundedCornerShape(1.5.dp)).background(color))
+    }
+}
+
+/** Plain code, or code in a language its syntax is coloured by; the one there is ticked. */
+private fun codeItems(editor: Editor): List<MenuItem> {
+    val current = editor.format?.codeLanguage
+    return CodeLanguage.entries.map { language ->
+        MenuItem(if (language == CodeLanguage.NONE) "Plain Code" else language.title, checked = current == language) {
+            editor.composer.toggleCodeBlock(language, now())
+            editor.focus.requestFocus()
+        }
+    }
+}
 
 /** Light, dark, or as the Mac is: across from the formatting tools, and in the View menu. */
 @Composable
@@ -301,28 +342,22 @@ private val SYNCED_GREEN = Color(0xFF34C759)
 /** How a letter on a toolbar button shows the style it stands for. */
 private enum class Decoration { NONE, ITALIC, UNDERLINE, STRIKETHROUGH }
 
-/** A toolbar button whose face is a letter or two. */
+/** A toolbar button whose face is a letter that shows the style it stands for. */
 @Composable
-private fun TextButton(text: String, help: String, onClick: () -> Unit, selected: Boolean = false, bold: Boolean = false, decoration: Decoration = Decoration.NONE) {
-    val c = colors
-    Tooltip(help) {
-        Box(
-            Modifier.size(30.dp, 28.dp).clip(RoundedCornerShape(7.dp)).background(if (selected) c.controlPressed else Color.Transparent).clickable(onClick = onClick),
-            contentAlignment = Alignment.Center,
-        ) {
-            BasicText(
-                text,
-                style = MacType.body.copy(
-                    color = c.secondaryText, fontSize = 15.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium, textAlign = TextAlign.Center,
-                    fontStyle = if (decoration == Decoration.ITALIC) androidx.compose.ui.text.font.FontStyle.Italic else null,
-                    textDecoration = when (decoration) {
-                        Decoration.UNDERLINE -> androidx.compose.ui.text.style.TextDecoration.Underline
-                        Decoration.STRIKETHROUGH -> androidx.compose.ui.text.style.TextDecoration.LineThrough
-                        else -> null
-                    },
-                ),
-            )
-        }
+private fun LetterButton(text: String, help: String, onClick: () -> Unit, selected: Boolean = false, bold: Boolean = false, decoration: Decoration = Decoration.NONE) {
+    ToolButton(help, onClick, selected = selected) { tint ->
+        BasicText(
+            text,
+            style = MacType.body.copy(
+                color = tint, fontSize = 15.sp, fontWeight = if (bold) FontWeight.Bold else FontWeight.Medium, textAlign = TextAlign.Center,
+                fontStyle = if (decoration == Decoration.ITALIC) androidx.compose.ui.text.font.FontStyle.Italic else null,
+                textDecoration = when (decoration) {
+                    Decoration.UNDERLINE -> androidx.compose.ui.text.style.TextDecoration.Underline
+                    Decoration.STRIKETHROUGH -> androidx.compose.ui.text.style.TextDecoration.LineThrough
+                    else -> null
+                },
+            ),
+        )
     }
 }
 
@@ -350,7 +385,9 @@ private fun textStyleItems(editor: Editor): List<MenuItem> {
         item("Title", Role.TITLE), item("Heading", Role.HEADING), item("Subheading", Role.SUBHEADING), item("Body", Role.BODY),
         MenuItem.SEPARATOR,
         item("Block Quote", Role.QUOTE),
-        item("Code Block", Role.CODE_BLOCK),
+        act("Code Block", checked = state?.codeLanguage == CodeLanguage.NONE) { composer.toggleCodeBlock(CodeLanguage.NONE, now()) },
+        act("C Code Block", checked = state?.codeLanguage == CodeLanguage.C) { composer.toggleCodeBlock(CodeLanguage.C, now()) },
+        act("C++ Code Block", checked = state?.codeLanguage == CodeLanguage.CPP) { composer.toggleCodeBlock(CodeLanguage.CPP, now()) },
         act("Inline Code", checked = state?.code == true) { composer.toggle(CharStyle.CODE, now()) },
         act("Dashed List", checked = state?.list == ListType.DASH) { composer.toggleList(ListType.DASH, now()) },
         act("Insert Divider") { composer.insertDivider(now()) },

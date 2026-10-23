@@ -22,6 +22,13 @@ data class MacColors(
     val secondaryText: Color,
     val tertiaryText: Color,
     val accent: Color,
+    /** Behind a tool that is on: the accent, faint. */
+    val accentSoft: Color,
+    /**
+     * A tool's icon: darker than secondary text, which made every tool look switched off, and
+     * lighter than the text, so the note stays what the eye goes to.
+     */
+    val icon: Color,
     val selection: Color,
     val selectionInactive: Color,
     val sidebarSelection: Color,
@@ -44,6 +51,8 @@ val LightColors = MacColors(
     secondaryText = Color(0xFF86868B),
     tertiaryText = Color(0xFFB0B0B5),
     accent = Color(0xFF007AFF),
+    accentSoft = Color(0x24007AFF),
+    icon = Color(0xFF4A4A4F),
     selection = Color(0xFF007AFF),
     selectionInactive = Color(0xFFDCDCE0),
     sidebarSelection = Color(0x14000000),
@@ -66,6 +75,8 @@ val DarkColors = MacColors(
     secondaryText = Color(0xFF98989D),
     tertiaryText = Color(0xFF636366),
     accent = Color(0xFF0A84FF),
+    accentSoft = Color(0x330A84FF),
+    icon = Color(0xFFC7C7CC),
     selection = Color(0xFF0A84FF),
     selectionInactive = Color(0xFF3A3A3C),
     sidebarSelection = Color(0x1FFFFFFF),

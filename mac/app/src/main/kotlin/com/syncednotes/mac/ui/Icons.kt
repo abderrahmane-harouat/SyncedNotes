@@ -76,6 +76,10 @@ object Icons {
     val undo = icon("arrow.uturn.backward", "M9 14L4.5 9.5 9 5", "M4.5 9.5h10a5 5 0 0 1 0 10H11")
     val redo = icon("arrow.uturn.forward", "M15 14l4.5-4.5L15 5", "M19.5 9.5h-10a5 5 0 0 0 0 10H13")
     val appearance = icon("circle.lefthalf.filled", "M20.5 12a8.5 8.5 0 1 1-17 0a8.5 8.5 0 1 1 17 0z", filled = listOf("M12 3.5a8.5 8.5 0 0 0 0 17z"))
+    /** Angle brackets and a slash: code, as code editors mark it. */
+    val code = icon("chevron.left.forwardslash.chevron.right", "M8 7.5L3.5 12 8 16.5", "M16 7.5l4.5 4.5-4.5 4.5", "M13.6 5l-3.2 14")
+    /** A marker with its chisel tip down, drawn above the colour bar the toolbar puts under it. */
+    val marker = icon("highlighter", "M15.2 3.2l4.6 4.6-7.4 7.4-4.6-4.6z", "M7.8 10.6l-1.6 4.9 2.3 2.3 4.9-1.6")
     val highlighter = icon("highlighter", "M14.5 4.5l5 5-8 8-5-5z", "M6.5 12.5l-2 4.5 2.5 2.5 4.5-2", "M3.5 20.5h6")
 }
 

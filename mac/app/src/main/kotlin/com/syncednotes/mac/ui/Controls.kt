@@ -12,6 +12,8 @@ import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.RowScope
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
@@ -96,8 +98,7 @@ fun MacButton(
     }
 }
 
-/** A toolbar button: an icon that shows a soft square when hovered, and when [selected]. */
-@OptIn(ExperimentalFoundationApi::class)
+/** A toolbar button: an icon that shows a soft square when hovered, and is tinted when [selected]. */
 @Composable
 fun ToolbarButton(
     icon: ImageVector,
@@ -106,29 +107,74 @@ fun ToolbarButton(
     enabled: Boolean = true,
     selected: Boolean = false,
     tint: Color? = null,
+    /** It opens a menu: a small chevron says so, as on the Mac's own pop-up buttons. */
+    menu: Boolean = false,
+) = ToolButton(help, onClick, enabled, selected, menu) { foreground ->
+    Icon(icon, tint?.takeIf { enabled } ?: foreground, size = 18.dp)
+}
+
+/**
+ * The frame every toolbar button shares, around [face], which is drawn in the colour it is
+ * given: the icon colour, the accent while [selected] (the style is on at the selection), or
+ * faint when it cannot be used. On, a tool is tinted in the accent, as the Mac shows a
+ * pressed toolbar button, rather than a grey a glance can miss.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ToolButton(
+    help: String,
+    onClick: () -> Unit,
+    enabled: Boolean = true,
+    selected: Boolean = false,
+    menu: Boolean = false,
+    face: @Composable (Color) -> Unit,
 ) {
     val interaction = remember { MutableInteractionSource() }
     val hovered by interaction.collectIsHoveredAsState()
     val c = colors
+    val foreground = when {
+        !enabled -> c.tertiaryText
+        selected -> c.accent
+        else -> c.icon
+    }
     Tooltip(help) {
-        Box(
+        Row(
             Modifier
-                .size(30.dp, 28.dp)
-                .clip(RoundedCornerShape(7.dp))
+                .height(28.dp)
+                .widthIn(min = 30.dp)
+                .clip(RoundedCornerShape(6.dp))
                 .background(
                     when {
-                        selected -> c.controlPressed
-                        hovered && enabled -> c.control
+                        selected -> c.accentSoft
+                        hovered && enabled -> c.controlPressed
                         else -> Color.Transparent
                     },
                 )
                 .hoverable(interaction)
-                .clickable(interaction, indication = null, enabled = enabled, onClick = onClick),
-            contentAlignment = Alignment.Center,
+                .clickable(interaction, indication = null, enabled = enabled, onClick = onClick)
+                .padding(horizontal = if (menu) 5.dp else 0.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center,
         ) {
-            Icon(icon, if (enabled) tint ?: c.secondaryText else c.tertiaryText, size = 18.dp)
+            face(foreground)
+            if (menu) Icon(Icons.chevronDown, foreground.copy(alpha = foreground.alpha * 0.7f), Modifier.padding(start = 2.dp), size = 9.dp)
         }
     }
+}
+
+/**
+ * Buttons that belong together, on one soft rounded panel, so the toolbar reads as a few
+ * groups (text style, lists, character styles, colour, inserting, undo) rather than a row of
+ * loose icons that all look alike.
+ */
+@Composable
+fun ToolGroup(content: @Composable RowScope.() -> Unit) {
+    Row(
+        Modifier.clip(RoundedCornerShape(8.dp)).background(colors.control).padding(2.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(1.dp),
+        content = content,
+    )
 }
 
 /** A tooltip after a moment's hover, as the Mac's help tags. */

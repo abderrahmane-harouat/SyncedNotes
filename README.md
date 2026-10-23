@@ -38,7 +38,8 @@ and is never saved over), rich copy and paste, dragging notes onto folders, typi
 - **Encrypted backups** to a file you choose, imported by adding to your notes or replacing
   them (what the backup lacks goes to the Trash), and a passphrase you can change at any time.
 - **The same notes on your phone.** Pair the Android app once (File > Pair a Phone… on the
-  Mac, Pair with your Mac on the phone, then check that both show the same code); from then
+  Mac, or the phone button beside the appearance button; Pair with your Mac on the phone;
+  then check that both show the same code); from then
   on each keeps the other's changes whenever both are open on the same network. Nothing goes
   through the internet ([`Docs/Sync.md`](Docs/Sync.md)).
 

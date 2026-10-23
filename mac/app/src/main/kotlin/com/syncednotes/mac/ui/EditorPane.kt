@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicText
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -63,6 +64,7 @@ fun EditorPane(
     Column(modifier.fillMaxSize().background(c.window)) {
         Row(Modifier.fillMaxWidth().height(HEADER_HEIGHT).padding(start = 12.dp, end = 12.dp, top = TITLE_BAR), verticalAlignment = Alignment.CenterVertically) {
             AppearanceButton(appearance, onAppearance)
+            model.sync?.let { SyncButton(model, it) }
             Spacer(Modifier.weight(1f))
             if (open != null && open.editable && !open.inTrash) FormatToolbar(editor)
         }
@@ -249,6 +251,29 @@ private fun AppearanceButton(appearance: Appearance, onAppearance: (Appearance) 
         )
     }
 }
+
+/**
+ * Pair a Phone, beside the appearance: green while a paired phone is connected, and its
+ * tooltip says how sync stands, so it shows at a glance whether the two are in step.
+ */
+@Composable
+private fun SyncButton(model: NotesModel, sync: com.syncednotes.core.sync.SyncService) {
+    val peers by sync.peers.collectAsState()
+    val states by sync.peerStates.collectAsState()
+    val peer = peers.firstOrNull()
+    val state = peer?.let { states[it.deviceId] }
+    val help = when {
+        peer == null -> "Pair a Phone"
+        state is com.syncednotes.core.sync.SyncService.PeerState.Connected -> "In sync with ${peer.name}"
+        state is com.syncednotes.core.sync.SyncService.PeerState.Failed -> state.message
+        else -> "Looking for ${peer.name}"
+    }
+    val connected = state is com.syncednotes.core.sync.SyncService.PeerState.Connected
+    ToolbarButton(Icons.phoneSync, help, { model.pairingPhone = true }, tint = if (connected) SYNCED_GREEN else null)
+}
+
+/** The Mac's system green, for a phone in sync. */
+private val SYNCED_GREEN = Color(0xFF34C759)
 
 /** A toolbar button whose face is a letter or two. */
 @Composable

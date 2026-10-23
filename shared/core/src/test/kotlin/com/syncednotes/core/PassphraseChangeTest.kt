@@ -181,4 +181,36 @@ class PassphraseChangeTest {
         assertFalse(PassphraseChange.finishInterruptedChange(home))
         reopen(old).use { assertEquals(note("Shopping"), it.load(id(2))) }
     }
+    @Test
+    fun whatSyncKnowsComesThroughAChange() {
+        val store = filledStore()
+        val gone = store.createFolder("Gone")
+        store.deleteFolder(gone)
+        store.saveSyncIdentity(SyncIdentity(id(20), "made-up Mac", ByteArray(32) { 1 }, ByteArray(91) { 2 }))
+        store.savePeer(SyncPeer(id(21), "made-up phone", com.google.protobuf.ByteString.copyFrom(ByteArray(91) { 3 }), at(100)))
+        val before = store.manifest()
+        change(store)
+        NoteStore(home, unlockVault(home, new)).use { changed ->
+            assertEquals(before.foldersList.toSet(), changed.manifest().foldersList.toSet())
+            assertEquals(id(20), changed.syncIdentity()!!.deviceId)
+            assertEquals(listOf(id(21)), changed.peers().map { it.deviceId })
+        }
+    }
+
+    @Test
+    fun aPhoneJoiningTheMacsVaultKeepsItsNotesUnderTheMacsPassphrase() {
+        val store = filledStore()
+        val macFolder = temporaryFolder("join-mac")
+        val macs = createVault(macFolder, "made-up Mac passphrase")
+        PassphraseChange.prepareJoining(store, home, Vault.unlock(macs.header, "made-up Mac passphrase"), "made-up Mac passphrase")
+        store.close()
+        PassphraseChange.swap(home)
+        assertEquals(macs.header, VaultHeader.decode(vaultHeaderFile(home).readBytes()))
+        assertFailsWith<LockException> { unlockVault(home, old) }
+        NoteStore(home, unlockVault(home, "made-up Mac passphrase")).use { joined ->
+            assertEquals(setOf("Shopping", "Door code 4812"), joined.summaries().map { it.title }.toSet())
+            assertContentEquals("picture-bytes-heron".toByteArray(), joined.picture(id(9)))
+        }
+        assertTrue(leftovers().isEmpty())
+    }
 }

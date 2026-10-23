@@ -6,6 +6,7 @@ import java.nio.file.Files
 import java.nio.file.StandardCopyOption
 import java.text.Collator
 import java.time.Instant
+import kotlinx.coroutines.flow.MutableStateFlow
 import syncednotes.note.v1.Note
 
 /** A note's, picture's or folder's 16-byte ID. ByteString, unlike ByteArray, compares by value. */
@@ -65,6 +66,14 @@ class NoteStore(folder: File, val vault: Vault, opener: SqlOpener = SqlOpener.cu
         }
     }
 
+    /**
+     * Counts every write that was kept, here or from the other device, so sync can tell the
+     * other device something changed without being told what.
+     */
+    val changes = MutableStateFlow(0L)
+
+    private var depth = 0
+    private var wrote = false
     private val picturesFolder = File(folder, "pictures").apply { mkdirs() }
     internal val database: SqlDatabase = try {
         opener.open(File(folder, DATABASE_NAME), vault.databaseKey)
@@ -101,7 +110,7 @@ class NoteStore(folder: File, val vault: Vault, opener: SqlOpener = SqlOpener.cu
         val arguments = mutableListOf<Any?>()
         when (scope) {
             Scope.All -> {}
-            Scope.NoFolder -> conditions.add("notes.folder IS NULL")
+            Scope.NoFolder -> conditions.add(IN_NO_FOLDER)
             is Scope.InFolder -> {
                 conditions += "notes.folder = ?"
                 arguments.add(scope.id)
@@ -251,10 +260,20 @@ class NoteStore(folder: File, val vault: Vault, opener: SqlOpener = SqlOpener.cu
         val children = all.groupBy { it.parent }
         // Finder's order: numbers by value, case and accents aside.
         val collator = Collator.getInstance().apply { strength = Collator.SECONDARY }
+        val placed = HashSet<Id>()
         fun ordered(parent: Id?): List<Folder> =
-            (children[parent] ?: emptyList()).sortedWith { a, b -> naturalCompare(a.name, b.name, collator) }
+            (children[parent] ?: emptyList()).filter { placed.add(it.id) }
+                .sortedWith { a, b -> naturalCompare(a.name, b.name, collator) }
                 .flatMap { listOf(it) + ordered(it.id) }
-        return ordered(null)
+        val top = ordered(null)
+        // Two devices can each move a folder into the other before they sync, or delete a
+        // parent while the other adds to it; both then agree on rows that no longer make a
+        // tree. Such folders are shown at the top, as if their parent were none, and their
+        // rows are left as they are, so both devices still agree.
+        val stranded = all.filter { it.id !in placed }.sortedWith { a, b -> naturalCompare(a.name, b.name, collator) }
+        return top + stranded.flatMap { folder ->
+            if (!placed.add(folder.id)) emptyList() else listOf(folder.copy(parent = null)) + ordered(folder.id)
+        }
     }
 
     /** Makes a folder named [name] inside [parent], or at the top; returns its ID. */
@@ -305,7 +324,10 @@ class NoteStore(folder: File, val vault: Vault, opener: SqlOpener = SqlOpener.cu
         val moved = query("SELECT count(*) FROM notes WHERE folder IN ($marks) AND deleted IS NULL AND trashed IS NULL", *doomed.toTypedArray()) { it.int(1) }.first()
         update("UPDATE notes SET trashed = ?, changed = ? WHERE folder IN ($marks) AND deleted IS NULL AND trashed IS NULL", t, t, *doomed.toTypedArray())
         // Children first, as each row points at its parent.
-        for (folder in doomed.reversed()) update("DELETE FROM folders WHERE id = ?", folder)
+        for (folder in doomed.reversed()) {
+            update("DELETE FROM folders WHERE id = ?", folder)
+            update("INSERT OR REPLACE INTO folder_deletions (id, deleted) VALUES (?, ?)", folder, t)
+        }
         moved
     }
 
@@ -319,8 +341,10 @@ class NoteStore(folder: File, val vault: Vault, opener: SqlOpener = SqlOpener.cu
     }
 
     /** How many notes outside the Trash each folder holds itself, by folder ID; null for no folder. */
-    fun noteCounts(): Map<Id?, Int> =
-        query("SELECT folder, count(*) FROM notes WHERE deleted IS NULL AND trashed IS NULL GROUP BY folder") { it.id(1) to it.int(2) }.toMap()
+    fun noteCounts(): Map<Id?, Int> = query(
+        "SELECT CASE WHEN $IN_NO_FOLDER THEN NULL ELSE notes.folder END AS f, count(*) FROM notes " +
+            "WHERE deleted IS NULL AND trashed IS NULL GROUP BY f",
+    ) { it.id(1) to it.int(2) }.toMap()
 
     /** Moves a note into [folder], or out of any folder with null. */
     fun moveNote(id: Id, folder: Id?, now: Instant = Instant.now()) {
@@ -330,8 +354,9 @@ class NoteStore(folder: File, val vault: Vault, opener: SqlOpener = SqlOpener.cu
         }
     }
 
-    /** The folder a note is in; null for none. */
-    fun folderOf(id: Id): Id? = query("SELECT folder FROM notes WHERE id = ?", id) { it.id(1) }.firstOrNull()
+    /** The folder a note is in; null for none, or for a folder that is not here. */
+    fun folderOf(id: Id): Id? =
+        query("SELECT CASE WHEN $IN_NO_FOLDER THEN NULL ELSE notes.folder END FROM notes WHERE id = ?", id) { it.id(1) }.firstOrNull()
 
     /**
      * Puts a folder back as a backup had it, unless one with its ID is here already, which
@@ -342,6 +367,8 @@ class NoteStore(folder: File, val vault: Vault, opener: SqlOpener = SqlOpener.cu
         // A parent that did not come through stays out of the picture: the folder goes at the top.
         val kept = parent?.takeIf(::folderExists)
         update("INSERT INTO folders (id, name, parent, created, changed) VALUES (?, ?, ?, ?, ?)", id, name, kept, seconds(created), seconds(now))
+        // Changed now, so it counts as newer than its deletion on either device.
+        update("DELETE FROM folder_deletions WHERE id = ?", id)
         true
     }
 
@@ -353,7 +380,7 @@ class NoteStore(folder: File, val vault: Vault, opener: SqlOpener = SqlOpener.cu
         update("UPDATE notes SET folder = ? WHERE id = ?", folder?.takeIf(::folderExists), id)
     }
 
-    private fun folderExists(id: Id): Boolean = query("SELECT 1 FROM folders WHERE id = ?", id) { true }.isNotEmpty()
+    internal fun folderExists(id: Id): Boolean = query("SELECT 1 FROM folders WHERE id = ?", id) { true }.isNotEmpty()
 
     /** [id] and every folder inside it, at any depth, parents first. */
     private fun folderAndInside(id: Id): List<Id> {
@@ -380,6 +407,14 @@ class NoteStore(folder: File, val vault: Vault, opener: SqlOpener = SqlOpener.cu
         update("INSERT INTO pictures (id, file) VALUES (?, ?)", id, file)
     }
 
+    /** Stores a picture that came locked from the other device, as it came; it was opened first. */
+    internal fun storeLockedPicture(id: Id, locked: ByteArray) {
+        if (query("SELECT 1 FROM pictures WHERE id = ?", id) { true }.isNotEmpty()) return
+        val file = newId().hex + ".snl"
+        writeAtomically(File(picturesFolder, file), locked)
+        update("INSERT INTO pictures (id, file) VALUES (?, ?)", id, file)
+    }
+
     fun picture(id: Id): ByteArray {
         val file = pictureFile(id) ?: throw StoreException(StoreException.Reason.NO_SUCH_PICTURE)
         val item = vault.open(file.readBytes(), expecting = ItemKind.PICTURE)
@@ -396,25 +431,36 @@ class NoteStore(folder: File, val vault: Vault, opener: SqlOpener = SqlOpener.cu
 
     // --- SQL ------------------------------------------------------------------------------
 
-    private var depth = 0
+    // Synchronized, every one of them: sync reads and writes from its own threads while the
+    // window does from its own, over the one connection. A transaction holds the lock to the
+    // end, so no other thread's statement lands in the middle of it.
 
     /** Runs [body] as one transaction; nested calls join the outer one. */
+    @Synchronized
     internal fun <T> transaction(body: () -> T): T {
         if (depth > 0) return body()
         database.begin()
         depth++
         try {
-            return body().also { database.commit() }
+            return body().also {
+                database.commit()
+                if (wrote) changes.value++
+            }
         } catch (e: Throwable) {
             database.rollback()
             throw e
         } finally {
             depth--
+            wrote = false
         }
     }
 
-    internal fun update(sql: String, vararg arguments: Any?): Int = database.update(sql, arguments)
+    @Synchronized
+    internal fun update(sql: String, vararg arguments: Any?): Int = database.update(sql, arguments).also {
+        if (depth > 0) wrote = true else changes.value++
+    }
 
+    @Synchronized
     internal fun <T> query(sql: String, vararg arguments: Any?, row: (SqlRow) -> T): List<T> = database.query(sql, arguments, row)
 
     companion object {
@@ -453,6 +499,15 @@ class NoteStore(folder: File, val vault: Vault, opener: SqlOpener = SqlOpener.cu
                 "CREATE TABLE folders (id BLOB PRIMARY KEY NOT NULL, name TEXT NOT NULL, parent BLOB REFERENCES folders(id), created REAL NOT NULL, changed REAL NOT NULL)",
                 "ALTER TABLE notes ADD COLUMN folder BLOB",
             ),
+            // Sync (Docs/Sync.md). A deleted folder leaves a mark, as a deleted note does, so
+            // the other device deletes it too instead of sending it back. This device's
+            // identity and the devices it is paired with live here, inside the locked
+            // database, so the identity's private key is only ever at hand while unlocked.
+            "v5: sync" to listOf(
+                "CREATE TABLE folder_deletions (id BLOB PRIMARY KEY NOT NULL, deleted REAL NOT NULL)",
+                "CREATE TABLE sync_identity (device_id BLOB NOT NULL, name TEXT NOT NULL, private_key BLOB NOT NULL, public_key BLOB NOT NULL)",
+                "CREATE TABLE sync_peers (device_id BLOB PRIMARY KEY NOT NULL, name TEXT NOT NULL, public_key BLOB NOT NULL, paired REAL NOT NULL)",
+            ),
         )
 
         /**
@@ -465,15 +520,19 @@ class NoteStore(folder: File, val vault: Vault, opener: SqlOpener = SqlOpener.cu
             return tokens.joinToString(" ") { "\"${it.replace("\"", "\"\"")}\"*" }
         }
 
+        /** A note in no folder, or in one that is not on this device. */
+        private const val IN_NO_FOLDER = "(notes.folder IS NULL OR notes.folder NOT IN (SELECT id FROM folders))"
+
         internal fun seconds(t: Instant): Double = t.epochSecond + t.nano / 1e9
 
-        private fun SqlRow.instant(column: Int): Instant? {
-            val s = double(column) ?: return null
+        internal fun instant(s: Double): Instant {
             val whole = Math.floor(s)
             return Instant.ofEpochSecond(whole.toLong(), Math.round((s - whole) * 1e9))
         }
 
-        private fun SqlRow.id(column: Int): Id? = bytes(column)?.let(ByteString::copyFrom)
+        internal fun SqlRow.instant(column: Int): Instant? = double(column)?.let(::instant)
+
+        internal fun SqlRow.id(column: Int): Id? = bytes(column)?.let(ByteString::copyFrom)
 
         /** Folder names in Finder's order: "Folder 2" before "Folder 10". */
         private fun naturalCompare(a: String, b: String, collator: Collator): Int {

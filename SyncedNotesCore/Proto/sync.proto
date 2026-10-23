@@ -1,0 +1,142 @@
+// What the Mac and the phone say to each other to stay in sync (see Docs/Sync.md).
+//
+// The app's code is generated from this file, as from note.proto (see the README). Fields are
+// only ever added, under new numbers, so an older app still understands a newer one's messages.
+//
+// IDs are 16 bytes. Times are seconds since 1970-01-01 UTC, as the store keeps them.
+
+syntax = "proto3";
+
+package syncednotes.sync.v1;
+
+option java_package = "syncednotes.sync.v1";
+option java_multiple_files = true;
+
+// --- The handshake, in the clear --------------------------------------------------------------
+
+// The phone's first frame on every connection, whichever side opened it.
+message Opening {
+  oneof kind {
+    PairRequest pair = 1;
+    SyncRequest sync = 2;
+  }
+}
+
+message PairRequest {
+  uint32 protocol = 1;
+  // SHA-256 of the phone's Hello frame, sent before the Mac's Hello is seen.
+  bytes commitment = 2;
+}
+
+// Each side's introduction when pairing.
+message Hello {
+  bytes device_id = 1;
+  string device_name = 2;
+  // P-256, SubjectPublicKeyInfo DER.
+  bytes identity_key = 3;
+  bytes ephemeral_key = 4;
+  bytes nonce = 5;
+  double time = 6;
+}
+
+message SyncRequest {
+  uint32 protocol = 1;
+  bytes device_id = 2;
+  bytes ephemeral_key = 3;
+  bytes nonce = 4;
+  double time = 5;
+  // The vault this device's notes are locked with.
+  bytes vault_id = 6;
+}
+
+message SyncReply {
+  bytes device_id = 1;
+  bytes ephemeral_key = 2;
+  bytes nonce = 3;
+  double time = 4;
+  bytes vault_id = 5;
+}
+
+message SignatureFrame {
+  // ECDSA with SHA-256, DER.
+  bytes signature = 1;
+}
+
+// --- Encrypted ------------------------------------------------------------------------------
+
+// The end of pairing, from each side once its user compared the codes.
+message PairConfirm {
+  bool accepted = 1;
+  bytes signature = 2;
+  // From the Mac only: its vault header (LockFormat.md), which the phone needs to unlock the
+  // same notes with the same passphrase.
+  bytes vault_header = 3;
+}
+
+// Everything said once a sync session is open.
+message Message {
+  oneof kind {
+    Manifest manifest = 1;
+    Records records = 2;
+    Ping ping = 3;
+    // From the Mac, when the phone's vault is not the Mac's: the passphrase was changed.
+    VaultChanged vault_changed = 4;
+  }
+}
+
+message Ping {}
+
+message VaultChanged {
+  bytes vault_header = 1;
+}
+
+// What a device has: one stamp per note and per folder, and the pictures it holds.
+message Manifest {
+  repeated Stamp notes = 1;
+  repeated Stamp folders = 2;
+  repeated bytes pictures = 3;
+}
+
+message Stamp {
+  bytes id = 1;
+  // When anything about it last changed on any device, its deletion included.
+  double changed = 2;
+  bool deleted = 3;
+}
+
+// The notes, folders and pictures the other side lacks or has in an older version.
+message Records {
+  repeated NoteRecord notes = 1;
+  repeated FolderRecord folders = 2;
+  repeated PictureRecord pictures = 3;
+}
+
+message NoteRecord {
+  bytes id = 1;
+  // The note locked with the vault's notes key, exactly as stored (LockFormat.md); empty for a
+  // deleted note.
+  bytes locked = 2;
+  double created = 3;
+  double updated = 4;
+  double changed = 5;
+  optional double deleted = 6;
+  optional double trashed = 7;
+  // Empty for a note in no folder.
+  bytes folder = 8;
+}
+
+message FolderRecord {
+  bytes id = 1;
+  string name = 2;
+  // Empty for a folder at the top.
+  bytes parent = 3;
+  double created = 4;
+  double changed = 5;
+  optional double deleted = 6;
+}
+
+message PictureRecord {
+  bytes id = 1;
+  // The picture locked with the vault's pictures key, exactly as stored.
+  bytes locked = 2;
+}

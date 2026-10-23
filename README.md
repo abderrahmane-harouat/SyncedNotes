@@ -123,10 +123,10 @@ rm -rf mac/app/build/compose/binaries/main/app/SyncedNotes.app
 | `shared/engine`, `shared/glyphs` | The note engine, for both apps: text, layout and editing in Kotlin, fonts and drawing in Rust |
 | `shared/assets/fonts` | The fonts both apps ship |
 | `android/app` | The phone app |
-| `SyncedNotesCore/Proto/note.proto` | The note format |
+| `SyncedNotesCore/Proto/note.proto`, `sync.proto` | The note format, and what the phone and the Mac say to each other |
 | `SyncedNotesCore/Fixtures/` | The lock's test files, written by the Swift app's lock code; the Kotlin lock must open them |
 | `SyncedNotes/`, `SyncedNotesCore/`, `Vendor/GRDB` | The Swift app, kept for reference until the new one does everything it did |
-| `Docs/` | Why it is built the way it is: [`Architect.md`](Docs/Architect.md) for the app, [`LockFormat.md`](Docs/LockFormat.md) for the encryption, byte for byte |
+| `Docs/` | Why it is built the way it is: [`Architect.md`](Docs/Architect.md) for the app, [`LockFormat.md`](Docs/LockFormat.md) for the encryption, byte for byte, [`Sync.md`](Docs/Sync.md) for syncing the phone and the Mac |
 | `Privacy.md`, `TODO.md` | The privacy rule and how it is kept; what comes next |
 
 Dependencies, each pinned to one version: Compose for Desktop 1.12.2, SQLite3 Multiple
@@ -151,7 +151,7 @@ Never edited by hand. Made again with:
 ```bash
 # The note format's Java code, after a change to note.proto (protoc 36.2, to match
 # protobuf-javalite 4.36.2):
-cd SyncedNotesCore/Proto && protoc --java_out=lite:../../shared/core/Generated note.proto
+cd SyncedNotesCore/Proto && protoc --java_out=lite:../../shared/core/Generated note.proto sync.proto
 ```
 
 The lock's test files were written by the Swift app's lock code (`swift run make-fixtures`);

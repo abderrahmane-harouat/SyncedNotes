@@ -40,9 +40,19 @@ object PassphraseChange {
      *
      * Returns the new vault. Then close [store] and call [swap].
      */
-    fun prepare(store: NoteStore, home: File, current: String, new: String): Vault {
-        val old = Vault.unlock(store.vault.header, current)
-        val vault = Vault.create(new)
+    fun prepare(store: NoteStore, home: File, current: String, new: String): Vault =
+        relock(store, home, Vault.unlock(store.vault.header, current), Vault.create(new), new)
+
+    /**
+     * The same, into a vault that already exists: the Mac's, which a phone joins on pairing so
+     * that both hold the same vault (LockFormat.md). [vault] is unlocked from the Mac's header
+     * with [passphrase], the Mac's, and the phone's notes are locked again under it. Asks for
+     * no current passphrase: the phone is unlocked, and pairing was confirmed on both screens.
+     */
+    fun prepareJoining(store: NoteStore, home: File, vault: Vault, passphrase: String): Vault =
+        relock(store, home, store.vault, vault, passphrase)
+
+    private fun relock(store: NoteStore, home: File, old: Vault, vault: Vault, new: String): Vault {
         val staging = staging(home)
         staging.deleteRecursively()
         File(staging, "pictures").mkdirs()
@@ -129,6 +139,12 @@ object PassphraseChange {
             .forEach { (note, words) -> copy.update("INSERT INTO search (note, words) VALUES (?, ?)", note, words) }
         store.query("SELECT id, file FROM pictures ORDER BY rowid") { r -> r.bytes(1)!! to r.string(2)!! }
             .forEach { (id, file) -> copy.update("INSERT INTO pictures (id, file) VALUES (?, ?)", id, file) }
+        // What sync keeps: without it, the other device would send back deleted folders, and
+        // would no longer be recognised.
+        store.query("SELECT id, deleted FROM folder_deletions ORDER BY rowid") { r -> r.value(1) to r.value(2) }
+            .forEach { (id, deleted) -> copy.update("INSERT INTO folder_deletions (id, deleted) VALUES (?, ?)", id, deleted) }
+        store.syncIdentity()?.let(copy::saveSyncIdentity)
+        store.peers().forEach(copy::savePeer)
     }
 
     /** Every picture file, opened with the old vault and locked again with the new one, under the same name. */
@@ -168,6 +184,11 @@ object PassphraseChange {
                 same("a picture", runCatching { copy.picture(id) }.getOrNull()?.toList(), runCatching { store.picture(id) }.getOrNull()?.toList())
             }
             same("search", copy.searchRows(), store.searchRows())
+            // As sets: the order rows come back in is not part of what is compared.
+            fun known(m: syncednotes.sync.v1.Manifest) = Triple(m.notesList.toSet(), m.foldersList.toSet(), m.picturesList.toSet())
+            same("what sync knows", known(copy.manifest()), known(store.manifest()))
+            same("the paired devices", copy.peers(), store.peers())
+            same("this device's identity", copy.syncIdentity()?.deviceId, store.syncIdentity()?.deviceId)
         }
     }
 

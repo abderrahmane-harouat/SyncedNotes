@@ -26,7 +26,7 @@ cd mac && ./gradlew test                    # the lock, store, backups, engine, 
 cd mac && ./gradlew :app:run                # the app on try-out notes, SyncedNotes-Try
 cd mac && ./gradlew :app:makeTryNotes       # made-up notes for that, then :app:run -PtryUnlock
 cd mac && ./gradlew :app:signApp            # the signed, sandboxed SyncedNotes.app
-cd SyncedNotesCore/Proto && protoc --java_out=lite:../../shared/core/Generated note.proto
+cd SyncedNotesCore/Proto && protoc --java_out=lite:../../shared/core/Generated note.proto sync.proto
 ```
 
 Installing: see the README. Keep exactly one copy of the app on the Mac,
@@ -50,6 +50,9 @@ Installing: see the README. Keep exactly one copy of the app on the Mac,
 - **The lock format is a contract.** [`Docs/LockFormat.md`](Docs/LockFormat.md) describes it byte
   for byte; the notes on disk and every backup depend on it. A change is a new format version,
   never a silent edit.
+- **The sync protocol is a contract too.** [`Docs/Sync.md`](Docs/Sync.md) and
+  `SyncedNotesCore/Proto/sync.proto` are what the phone and the Mac both speak; both apps run
+  the one implementation in `shared/core` (package `sync`), so a change there is a change to both.
 - **Never edit `SyncedNotesCore/Fixtures/` or `Generated/` by hand.** The lock's test files were
   written by the Swift app's lock code, and the Kotlin lock's tests open them as they are. The
   note format's code is generated from `Proto/note.proto`, whose fields are only ever added

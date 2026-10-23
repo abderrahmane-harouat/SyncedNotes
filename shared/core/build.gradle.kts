@@ -33,6 +33,8 @@ dependencies {
     // Android build, so the Mac app brings it in itself and the phone uses SQLCipher for Android.
     compileOnly("io.github.willena:sqlite-jdbc:3.53.4.0")
     testImplementation("io.github.willena:sqlite-jdbc:3.53.4.0")
+    // For sync's sessions; the version Compose for Desktop already brings to the Mac app.
+    api("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.9.0")
     // Lite, matching protoc 36.2: the generated code needs no reflection.
     api("com.google.protobuf:protobuf-javalite:4.36.2")
     testImplementation(kotlin("test"))

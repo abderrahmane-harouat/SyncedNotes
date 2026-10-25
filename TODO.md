@@ -100,6 +100,8 @@ Trash and pictures. Tried between this Mac's try-out notes and a Galaxy M32.
 - [x] The block's language shown on the block, and changed from there.
 - [ ] More languages for code blocks.
 - [x] Callouts in six colours, on both; pasted from web pages, Notion and Markdown alerts.
+- [x] A folder shared with an AI agent, through MCP, on the Mac.
+- [ ] The phone's own agent access, if ever wanted; today the agent works through the Mac.
 - [ ] Sync in the background on the phone, while the app is closed: today it syncs while open
   and unlocked, as SyncedPass does.
 - [ ] Deletion marks kept forever: prune those both devices have seen.

@@ -80,6 +80,9 @@ private fun tryPairing(): Boolean = System.getProperty("syncednotes.tryPairing")
 /** A word for Find in Note to look for in the first note at launch, to look at its markers; made-up notes only. */
 private fun tryFind(): String? = System.getProperty("syncednotes.tryFind")?.takeIf { folderName() != REAL_FOLDER }
 
+/** A folder to share with an AI agent at launch, by name, to try an agent on; made-up notes only. */
+private fun tryAgentFolder(): String? = System.getProperty("syncednotes.tryAgentFolder")?.takeIf { folderName() != REAL_FOLDER }
+
 /** A picture file to put into the first note at launch, to look at it; made-up notes only. */
 private fun tryPicture(): String? = System.getProperty("syncednotes.tryPicture")?.takeIf { folderName() != REAL_FOLDER }
 
@@ -143,6 +146,7 @@ fun main() {
                     delay(800)
                     model.insertPicture(File(it))
                 }
+                tryAgentFolder()?.let { name -> model.folders.firstOrNull { it.name == name }?.let { model.shareWithAgent(it.id) } }
                 tryFind()?.let {
                     delay(800)
                     editor.findText = it

@@ -45,6 +45,10 @@ until the new one does everything it did. Not independently reviewed. What comes
   from the toolbar's callout button on the Mac or the swatches in the phone's Text options;
   inline code sits on a chip of its own. Coloured boxes pasted from a web page or Notion come in
   as callouts, and Markdown's `> [!NOTE]` alerts too.
+- **A folder for your AI agent.** Share one folder with Claude Code, Claude Desktop or opencode,
+  on your subscription, and the agent can read, change and add notes there through MCP, and see
+  nothing else ([`Docs/AIAgents.md`](Docs/AIAgents.md)). It is the one way notes leave your
+  devices, and only those in that folder.
 - **The same tools on the Mac and the phone.** The phone's toolbar is Samsung Notes': checklist,
   a Text options card with every paragraph and character style, font colour, highlight, size,
   undo and redo, plus a picture button and reading mode. The Mac has the same in its toolbar,

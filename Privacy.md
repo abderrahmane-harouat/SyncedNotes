@@ -12,6 +12,14 @@ No cloud, no backup service, no assistant, no AI feature, no analytics. A backup
 where the user saves it, locked. Sync goes straight from one device to the other over the
 local network, encrypted twice ([`Docs/Sync.md`](Docs/Sync.md)), and nowhere else.
 
+**The one exception is the user's own choice: a folder shared with an AI agent**
+([`Docs/AIAgents.md`](Docs/AIAgents.md)). The agent reads and changes the notes in that one
+folder, and sends what it reads to the company that runs its model, as it does everything it
+is given. Nothing is shared until the user picks a folder and is told this first, in the
+app; the folder is marked in the sidebar for as long as it is shared; no other note, title or
+folder name is ever within the agent's reach. A folder holding passwords or keys should never
+be the one shared.
+
 "Note content" means the text, titles, folder names, pictures, the passphrase, what is
 searched for, and anything derived from them, like previews, search indexes, screenshots, or
 what a keyboard learns.
@@ -110,6 +118,11 @@ Done:
   `Pasteboard`, which marks it for this Mac only (`currentHostOnly`), keeping it out of
   Universal Clipboard; Compose's fields are given that pasteboard in place of Java's. A
   passphrase field refuses to copy at all.
+- **A folder shared with an AI agent** is reached only through the app, while it runs: an MCP
+  server on the loopback address alone, which nothing on the network can reach, answering only
+  requests with the token the app made, and none a web page makes (`AgentServer`). Locked, it
+  has no key and answers that the notes are locked. Notes are never written out in plain text
+  for it. Everything else about it is in [`Docs/AIAgents.md`](Docs/AIAgents.md).
 - **Pasting reads, and fetches nothing.** ⌘V reads the plain text and the HTML a browser or
   Notion put on the pasteboard, to keep headings, lists and code as they were (`HtmlReader`,
   `MarkdownReader` in the engine). Only the markup is read: a picture or link in it is never

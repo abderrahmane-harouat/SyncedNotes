@@ -196,6 +196,10 @@ private fun FolderRow(model: NotesModel, folder: NoteStore.Folder, onDeleteFolde
                 NameField(folder.name, onDone = { model.renameFolder(folder.id, it) }, onCancel = { model.renamingFolder = null }, modifier = Modifier.weight(1f))
             } else {
                 TruncatedText(folder.name, Modifier.weight(1f), MacType.body.copy(color = c.text))
+                // The folder an AI agent can read and change, marked so it is never forgotten.
+                if (model.agentFolder == folder.id) {
+                    Tooltip("Shared with an AI agent") { Icon(Icons.agent, c.accent, size = 13.dp) }
+                }
                 Count(model.noteCounts[folder.id] ?: 0)
             }
             // The arrow that opens a folder's folders, at the row's end, as in the Mac's sidebars.
@@ -217,6 +221,8 @@ private fun FolderRow(model: NotesModel, folder: NoteStore.Folder, onDeleteFolde
                 MenuItem("Rename") { model.renamingFolder = folder.id },
                 MenuItem.SEPARATOR,
                 MenuItem("Move to Top Level", enabled = folder.parent != null) { model.moveFolder(folder.id, null) },
+                MenuItem.SEPARATOR,
+                MenuItem(if (model.agentFolder == folder.id) "AI Agent Access…" else "Share with AI Agent…") { model.sharingWithAgent = folder.id },
                 MenuItem.SEPARATOR,
                 MenuItem("Delete Folder…", destructive = true) { onDeleteFolder(folder.id) },
             ),

@@ -38,7 +38,9 @@ Installing: see the README. Keep exactly one copy of the app on the Mac,
 ## Rules
 
 - **Notes never leave the user's Mac and phone, not even to Apple or Google.** Sync goes
-  straight between the two over the local network ([`Docs/Sync.md`](Docs/Sync.md)). No iCloud, no Siri, Apple Intelligence or
+  straight between the two over the local network ([`Docs/Sync.md`](Docs/Sync.md)). The one
+  exception is the user's own choice: the folder they share with an AI agent
+  ([`Docs/AIAgents.md`](Docs/AIAgents.md)), and nothing outside it, ever. No iCloud, no Siri, Apple Intelligence or
   Writing Tools, no Handoff or Universal Clipboard, no Spotlight indexing, no crash reporting or
   analytics. A system feature stays off until it is confirmed to keep data on the device, and it
   is turned off in code rather than left to the defaults. Everything about it lives in

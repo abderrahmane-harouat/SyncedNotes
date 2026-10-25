@@ -25,6 +25,9 @@ dependencies {
     // The store's way into its database on the Mac (see Sql.kt in shared/core).
     implementation("io.github.willena:sqlite-jdbc:3.53.4.0")
     implementation(compose.desktop.currentOs)
+    // JSON for the MCP server a folder is shared with an AI agent through (AgentServer.kt):
+    // the same library the core's tests use, read as plain JSON values, with no code generated.
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.12.0")
     testImplementation(kotlin("test"))
 }
 
@@ -66,8 +69,8 @@ compose.desktop {
             packageVersion = "1.0.0"
             appResourcesRootDir.set(layout.buildDirectory.dir("appResources"))
             // The JDK's own parts the app needs besides the desktop: SQL for the store,
-            // jdk.unsupported for Protobuf.
-            modules("java.sql", "jdk.unsupported")
+            // jdk.unsupported for Protobuf, jdk.httpserver for the AI agent's MCP server.
+            modules("java.sql", "jdk.unsupported", "jdk.httpserver")
             macOS {
                 // Not the Swift app's com.syncednotes.mac: its sandbox folder holds the notes
                 // that app wrote, and this app brings them in through a backup instead.
@@ -171,6 +174,7 @@ tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
     val tryPairing = project.hasProperty("tryPairing")
     val tryFind = project.findProperty("tryFind") as String?
     val tryPicture = project.findProperty("tryPicture") as String?
+    val tryAgentFolder = project.findProperty("tryAgentFolder") as String?
     val library = glyphsRelease.asFile.absolutePath
     doFirst {
         (this as JavaExec).jvmArgs(
@@ -190,6 +194,8 @@ tasks.withType<JavaExec>().matching { it.name == "run" }.configureEach {
         tryFind?.let { jvmArgs("-Dsyncednotes.tryFind=$it") }
         // Puts this picture file into the first note: -PtryPicture=/path/to/picture.png.
         tryPicture?.let { jvmArgs("-Dsyncednotes.tryPicture=$it") }
+        // Shares this folder of the made-up notes with an AI agent: -PtryAgentFolder=Work.
+        tryAgentFolder?.let { jvmArgs("-Dsyncednotes.tryAgentFolder=$it") }
     }
 }
 

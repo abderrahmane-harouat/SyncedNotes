@@ -170,6 +170,100 @@ class NotesModel(
     /** Whether the Pair a Phone sheet is open. */
     var pairingPhone by mutableStateOf(false)
 
+    // --- An AI agent's folder (Docs/AIAgents.md) ---------------------------------------------
+
+    private val agentAccess = com.syncednotes.mac.agent.AgentAccess(home.name)
+    /** The folder an AI agent may read and change, with the folders inside it; null for none. */
+    var agentFolder: Id? by mutableStateOf(agentAccess.folder)
+        private set
+    /** The folder whose Share with AI Agent sheet is open. */
+    var sharingWithAgent: Id? by mutableStateOf(null)
+    /** Where the agent finds the server, while it is running; null while it is not. */
+    var agentUrl: String? by mutableStateOf(null)
+        private set
+    val agentToken: String get() = agentAccess.token
+    private var agentServer: com.syncednotes.mac.agent.AgentServer? = null
+
+    /**
+     * Shares [folder] with an AI agent, in place of any shared before: from now on, while the
+     * notes are unlocked, an agent with the token reads and changes the notes in it.
+     */
+    fun shareWithAgent(folder: Id) {
+        agentAccess.folder = folder
+        agentFolder = folder
+        startAgentServer()
+    }
+
+    fun stopSharingWithAgent() {
+        agentAccess.folder = null
+        agentFolder = null
+        stopAgentServer()
+    }
+
+    /** A new token: the agents given the old one are shut out, until given this one. */
+    fun newAgentToken() {
+        agentAccess.newToken()
+        if (agentServer != null) startAgentServer()
+    }
+
+    /**
+     * Runs while a folder is shared, the notes locked or not: locked, it has no key and can
+     * only answer that they are locked, which tells the agent what to ask its owner for.
+     */
+    private fun startAgentServer() {
+        stopAgentServer()
+        if (agentFolder == null) return
+        // The port last used, so the agents' settings stay right; the next free one if it is taken.
+        val first = agentAccess.port
+        for (port in first until first + 20) {
+            val server = com.syncednotes.mac.agent.AgentServer(port, agentAccess.token, ::agentCall)
+            try {
+                server.start()
+            } catch (_: java.net.BindException) {
+                continue
+            }
+            agentServer = server
+            agentAccess.port = port
+            agentUrl = server.url
+            return
+        }
+        problem = "The AI agent's server could not start: ports $first to ${first + 19} on this Mac are all taken."
+    }
+
+    private fun stopAgentServer() {
+        agentServer?.close()
+        agentServer = null
+        agentUrl = null
+    }
+
+    /**
+     * One call from the agent, on the window's thread, where everything the window shows is
+     * changed. What was typed in the open note is saved first, so the agent works on the note
+     * as it is on screen; what the agent changed is then shown, as a change from the phone is.
+     */
+    private fun agentCall(tool: String, arguments: kotlinx.serialization.json.JsonObject): com.syncednotes.mac.agent.AgentNotes.Result {
+        // The window's thread is AWT's event thread, which Compose for Desktop draws and
+        // composes on; the server's own thread waits there for the answer.
+        var answer: Result<com.syncednotes.mac.agent.AgentNotes.Result>? = null
+        javax.swing.SwingUtilities.invokeAndWait {
+            answer = runCatching {
+                val store = store ?: throw com.syncednotes.mac.agent.AgentNotes.AgentError("The notes are locked. Unlock SyncedNotes on the Mac to work on them.")
+                val folder = agentFolder ?: throw com.syncednotes.mac.agent.AgentNotes.AgentError("No folder is shared with an agent any more.")
+                saveNow()
+                val result = com.syncednotes.mac.agent.AgentServer.dispatch(com.syncednotes.mac.agent.AgentNotes(store, folder), tool, arguments)
+                if (result.changed.isNotEmpty()) {
+                    val open = document
+                    if (open != null && open.id in result.changed && store.isInTrash(open.id)) closeEditor()
+                    remoteChanged(result.changed)
+                } else {
+                    refresh()
+                }
+                result
+            }
+        }
+        return answer!!.getOrThrow()
+    }
+
     /** The engine showing the open note; the note's text lives there while it is open. */
     private var editor: Composer? = null
     /** What read the open note into the engine, and writes it out again. */
@@ -189,6 +283,7 @@ class NotesModel(
             problem = "A passphrase change that was stopped part way could not be finished: ${e.message}"
         }
         phase = Phase.Locked(firstRun = !vaultHeaderFile(home).exists())
+        startAgentServer()
     }
 
     // --- Locking --------------------------------------------------------------------------
@@ -237,6 +332,7 @@ class NotesModel(
     /** Quitting: the note on screen is saved, or removed if it was left empty. */
     fun quit() {
         leaveCurrentNote()
+        stopAgentServer()
         sync?.detach()
     }
 

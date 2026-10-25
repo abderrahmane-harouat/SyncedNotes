@@ -82,6 +82,13 @@ object Icons {
         "M5.5 5h13A2.5 2.5 0 0 1 21 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5v-9A2.5 2.5 0 0 1 5.5 5z",
         "M7 9.5h10", "M7 13h6.5",
     )
+    /** Two sparkles: an AI agent, as the folder shared with one is marked. */
+    val agent = icon(
+        "sparkles", filled = listOf(
+            "M10 3.5c.7 4.3 2.2 5.8 6.5 6.5-4.3.7-5.8 2.2-6.5 6.5-.7-4.3-2.2-5.8-6.5-6.5 4.3-.7 5.8-2.2 6.5-6.5z",
+            "M17.5 13.5c.35 2.1 1.1 2.85 3.2 3.2-2.1.35-2.85 1.1-3.2 3.2-.35-2.1-1.1-2.85-3.2-3.2 2.1-.35 2.85-1.1 3.2-3.2z",
+        ),
+    )
     /** Angle brackets and a slash: code, as code editors mark it. */
     val code = icon("chevron.left.forwardslash.chevron.right", "M8 7.5L3.5 12 8 16.5", "M16 7.5l4.5 4.5-4.5 4.5", "M13.6 5l-3.2 14")
     /** A marker with its chisel tip down, drawn above the colour bar the toolbar puts under it. */

@@ -126,6 +126,7 @@ fun NotesWindow(
         }
         if (model.changingPassphrase) ChangePassphraseSheet(model)
         model.sync?.let { if (model.pairingPhone) PairPhoneSheet(model, it) }
+        model.sharingWithAgent?.let { AgentSheet(model, it) }
         if (model.importToChoose != null) ImportChoiceSheet(model)
         if (model.importWaitingForPassphrase != null) BackupPassphraseSheet(model)
         model.problem?.let { AlertSheet("Something went wrong", it) { model.problem = null } }

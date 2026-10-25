@@ -134,7 +134,7 @@ tasks.matching { it.name == "prepareAppResources" || it.name == "createDistribut
 
 // Signed on this Mac only, with no Apple account (Privacy.md), and sandboxed: user-chosen files,
 // and the local network for the paired phone.
-val appVersion = "0.2.0"
+val appVersion = "0.3.0"
 val signApp = tasks.register<Exec>("signApp") {
     dependsOn("createDistributable")
     val app = layout.buildDirectory.file("compose/binaries/main/app/SyncedNotes.app")

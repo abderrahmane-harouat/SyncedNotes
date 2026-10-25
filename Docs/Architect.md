@@ -54,6 +54,46 @@ they are shown, off the drawing thread, and handed to the Rust half, which only 
 pixels: no image format's code is in the engine. Every picture is written afresh before it is
 kept, which bounds its size and drops a photo's metadata.
 
+## The fonts, and what is an emoji
+
+Each face is a stack of the fonts both apps ship (`AppFonts`): Roboto, then Noto Naskh Arabic,
+then Noto Sans Math and Noto Sans Symbols 2, then Noto Color Emoji; a character is drawn from the
+first that has it. Roboto has none of Unicode's arrows, and without the two symbol fonts they
+were empty boxes. Those fonts also have black-and-white forms of about 365 emoji (⭐, ✅, 👍), which
+would have come before the colour ones, so the shaper does not go by order alone: what Unicode
+calls an emoji by default (`Emoji_Presentation`, from `emoji-data.txt`, in `shape.rs`) comes
+from the colour font, everything else is text, and the selectors U+FE0F and U+FE0E ask for
+either form, as a browser does. Android solves the same by cutting its symbol fonts down; the
+fonts here are kept as they were published. A line's height still comes from the first font
+alone, so an arrow never makes its line taller.
+
+## Tables: a cell is a paragraph
+
+A table's cells are paragraphs of the note, in reading order, row after row, each marked with
+its table, row and column (`TableCell` in its `ParagraphStyle`), as a callout is a paragraph
+marked with its colour. So typing in a cell, the keyboard on the phone, undo, Find, bold and the
+rest work there as anywhere, with no second editor inside the first; only the layout differs.
+The Swift app went the other way, a table as one attachment holding its own model of cells, and
+needed a text view per cell and focus moved between them by hand (below).
+
+- **Layout** (`DocumentLayout.layoutTable`) puts a row's cells side by side and makes the row as
+  tall as its tallest cell. Columns are as wide as their text, or a starting width while they
+  need less, in whole pixels; when that is more than the note's width, the widest columns are
+  held to one width, never below their longest word, as a browser's table shrinks. Each
+  paragraph is shaped once and kept apart from its lines, so a column that widens while its
+  cells are typed in breaks them into lines again without shaping them again.
+- **One rule keeps a table whole**, in `Composer.keepsTables`, which every edit passes through:
+  a line break typed or pasted into a cell becomes a space; Backspace or Delete against a cell's
+  edge moves the caret rather than joining it to what is beside it, though an empty line before
+  or after a table goes; a selection over whole tables deletes them, and one over part of a
+  table empties what it covers and keeps the grid. Being in one place, it holds for an input
+  method's deleting as for a key.
+- **Commands that reshape a table** (a row or a column added or taken away) rebuild its text in
+  one edit and put each cell's formatting back where the cell went, so they are one undo step.
+- **Stored** as the note format's `Table` in the paragraph of one U+FFFC where the table stands,
+  as the Swift app defined it, with `header_row` added under a new field number. A cell holding
+  more than one paragraph is not the engine's, and its note opens read-only.
+
 ## Find in Note
 
 Matches are found in a copy of the text folded one character for one (lower case, accents
@@ -71,7 +111,10 @@ Rust: font parsing, shaping, rasterizing). Both builds include `shared/engine` a
 lock and store notes the same.
 
 **The engine owns the text**, as the text view did before. The window hands it a note only
-when another is chosen (`NotesModel.showInEditor`), and reads it back only to save.
+when another is chosen (`NotesModel.showInEditor`), and reads it back only to save, or when sync
+takes in a newer version of the note on screen (`remoteChanged`). That version replaces the
+open note by reference: an `OpenNote` equals any other with its ID, and Compose's state, which
+by default keeps a value equal to the one it has, kept showing the old text.
 
 **A frame is never copied on its way in.** The Rust compositor paints premultiplied RGBA,
 which is Skia's own layout, straight into the memory of the window's Skia bitmap: Java's FFM
@@ -86,7 +129,8 @@ checklist, divider), lists in levels with an ID and a start, alignment and direc
 spacing; sizes are relative to the role's, as stored. `NoteFormat` reads a note into the
 engine and writes it back. A note opens for editing only if that round trip gives back
 exactly the stored note (`NoteFormat.canEdit`): anything the engine does not model yet, a
-picture amid text or a table, makes the note read-only rather than something a save would drop. Each
+picture amid text or a table cell of several paragraphs, makes the note read-only rather than
+something a save would drop. Each
 text colour read is kept with its exact floats, since eight bits a channel cannot hold them.
 
 **What AppKit used to do for the privacy rule is done by hand** (`KeepOnThisMac.kt`), through
@@ -146,7 +190,7 @@ behind code, a line for a divider. The text stays exactly what was typed. A divi
 attachment character on its own paragraph, which keeps it atomic; the line is drawn by the
 paragraph, because TextKit 2 never drew a custom attachment's own image or view here.
 
-## Checklists, pictures, tables
+## Checklists, pictures, tables in the Swift app
 
 **Checklist items are a paragraph role**, like quotes, with the checked state recorded on the
 item's text (`checkedKey`). The circle is drawn by the item's layout fragment, and the click

@@ -116,18 +116,23 @@ Done:
   Writing Tools, AutoFill or Start Dictation.
 - **Copies stay on this Mac.** Everything copied, from a note or from a field, goes through
   `Pasteboard`, which marks it for this Mac only (`currentHostOnly`), keeping it out of
-  Universal Clipboard; Compose's fields are given that pasteboard in place of Java's. A
-  passphrase field refuses to copy at all.
+  Universal Clipboard; Compose's fields are given that pasteboard in place of Java's. A table
+  copies as plain tab-separated text the same way. A passphrase field refuses to copy at all.
 - **A folder shared with an AI agent** is reached only through the app, while it runs: an MCP
   server on the loopback address alone, which nothing on the network can reach, answering only
   requests with the token the app made, and none a web page makes (`AgentServer`). Locked, it
   has no key and answers that the notes are locked. Notes are never written out in plain text
   for it. Everything else about it is in [`Docs/AIAgents.md`](Docs/AIAgents.md).
-- **Pasting reads, and fetches nothing.** ⌘V reads the plain text and the HTML a browser or
-  Notion put on the pasteboard, to keep headings, lists and code as they were (`HtmlReader`,
-  `MarkdownReader` in the engine). Only the markup is read: a picture or link in it is never
-  loaded, so a paste cannot reach the network or tell a site it was pasted. ⌥⇧⌘V pastes the
-  plain text alone.
+- **Pasting reads, and fetches nothing.** ⌘V reads the plain text and the HTML a browser,
+  Notion or VS Code put on the pasteboard, to keep headings, lists, tables and code as they
+  were (`HtmlReader`, `MarkdownReader` in the engine). Only the markup is read: a picture or
+  link in it is never loaded, so a paste cannot reach the network or tell a site it was
+  pasted. ⌥⇧⌘V pastes the plain text alone.
+- **The fonts are the app's own**, inside it (`shared/assets/fonts`): Roboto, Noto Naskh
+  Arabic, Noto Sans Math and Noto Sans Symbols 2 for arrows and symbols, and Noto Color Emoji.
+  The engine never asks the system for a font, nor for one to fall back on, so no font is ever
+  fetched for a character the note holds; one no font has shows as an empty box. The phone is
+  the same.
 - **Passphrase fields turn on secure input** while they have focus, shown or hidden, so other
   apps cannot watch the keystrokes; it is turned off again exactly once (`SecureInput`).
 - **Windows are kept out of screenshots and screen recording** (`sharingType = .none`).

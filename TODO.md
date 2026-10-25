@@ -20,11 +20,14 @@ Until these are done, the Swift app stays in the repo and on the Mac.
   Notion, VS Code and Markdown, and synced. The AI agent reads and writes them as Markdown.
 - [ ] A picture amid text on a line (the Swift app could make one); a note holding one still
   opens read-only.
+- [x] **Arrows and symbols** (← → ⇒ ⟶ ➜ and the rest of Unicode's arrows) drawn on both, from
+  Noto Sans Math and Noto Sans Symbols 2; what is an emoji by default (⭐, ✅) stays in colour.
 - [ ] Copying and pasting a picture; resizing one.
 - [x] **Rich paste** from web pages, Notion and Markdown (the Copy buttons of Claude and
   ChatGPT): headings, lists, checklists, quotes, code with its language, dividers, bold,
   italic, underline, strikethrough, inline code, tables.
-- [ ] **Rich copy** between notes, keeping formatting; plain text today, and none on the phone.
+- [ ] **Rich copy** between notes, keeping formatting; plain text today (a table's cells set
+  apart by tabs), and none on the phone.
 - [ ] Lists that start as you type: `- `, `* ` or `1. ` at the start of a line.
 - [ ] An Edit menu that acts on the note or the field that has focus.
 - [ ] Dragging notes onto folders, and columns that can be resized.
@@ -88,6 +91,10 @@ Since 2026-10-23 the Android app keeps the same notes as the Mac over the local 
 Trash and pictures. Tried between this Mac's try-out notes and a Galaxy M32.
 
 - [ ] Try the packaged, sandboxed Mac app with the phone (the try-out run is unsandboxed).
+- [x] A change from the phone shows at once in the note open on the Mac (it showed only once
+  the note was opened again).
+- [ ] With two Macs announcing themselves (the try-out run beside the real app, unlocked), a
+  phone just paired stayed "Looking for…" until its Mac announced itself again.
 - [x] The phone's dark theme, with the Mac's choice of System, Light or Dark.
 - [x] The phone's own Change Passphrase, for a phone not paired.
 - [ ] The Mac's passphrase change reaching the phone on screen (the phone is told today, and

@@ -12,8 +12,8 @@ android {
         // 28 because the emulator that runs Samsung Notes for comparison is Android 9.
         minSdk = 28
         targetSdk = 36
-        versionCode = 1
-        versionName = "0.1.0"
+        versionCode = 2
+        versionName = "0.3.0"
     }
 
     // The fonts are the Mac's too; one copy in shared/assets serves both.

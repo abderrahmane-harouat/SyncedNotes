@@ -20,7 +20,7 @@ over your own network, never to Apple or Google.
   <img src="Docs/images/phone-tools.png" width="250" alt="The phone's Text options card">
 </p>
 
-**Version 0.2.0.** Both apps are written in Kotlin around one note engine of their own
+**Version 0.3.0.** Both apps are written in Kotlin around one note engine of their own
 (`shared/engine`, with its Rust half in `shared/glyphs`), which draws and edits the note
 itself: no text view of Apple's, Google's or Compose's is involved. The Mac app is built
 without Xcode; version 0.1.0 was a SwiftUI app, whose sources stay in the repo as reference
@@ -30,17 +30,18 @@ until the new one does everything it did. Not independently reviewed. What comes
 ## What it does
 
 - **Rich notes.** Titles, headings and subheadings; bulleted, dashed and numbered lists, nested;
-  checklists; quotes, code blocks and inline code; dividers; pictures; bold, italic, underline
-  and strikethrough; text colours and highlights; alignment, indents and line spacing. Arabic
-  and other right-to-left text runs in its own direction, joined as it should be, with emoji in
-  colour.
+  checklists; quotes, code blocks and inline code; dividers; tables; pictures; bold, italic,
+  underline and strikethrough; text colours and highlights; alignment, indents and line spacing.
+  Arabic and other right-to-left text runs in its own direction, joined as it should be, with
+  emoji in colour, and arrows and other symbols (← → ⇒ ➜ ✓ ★) drawn in the text's colour.
 - **Code notes.** A code block can be in C or C++, and its syntax is coloured as an editor
   colours it: keywords, types, strings, numbers, comments, preprocessor lines and calls, in
   colours for the light look and the dark one. A comment or a raw string over many lines is
   coloured on every one of them.
 - **Paste keeps the formatting** of what was copied from a web page (Claude, ChatGPT), from
-  Notion, or as Markdown from a Copy button: headings, lists, checklists, quotes, code in its
-  language, bold and the rest. ⌥⇧⌘V on the Mac, Ctrl+Shift+V on the phone, paste plain text.
+  Notion, VS Code, or as Markdown from a Copy button: headings, lists, checklists, quotes, tables,
+  code in its language, bold and the rest. ⌥⇧⌘V on the Mac, Ctrl+Shift+V on the phone, paste
+  plain text.
 - **Callouts.** Set lines apart on a coloured panel, blue, green, orange, purple, pink or gray,
   from the toolbar's callout button on the Mac or the swatches in the phone's Text options;
   inline code sits on a chip of its own. Coloured boxes pasted from a web page or Notion come in
@@ -48,7 +49,8 @@ until the new one does everything it did. Not independently reviewed. What comes
 - **Tables.** A table as Notion draws one, its columns as wide as their text, a shaded header
   row: from the toolbar's table button on the Mac (⌥⌘T) or the phone's Text options, with rows
   and columns added or taken away there. Tab and Return go from cell to cell. A table pasted
-  from a web page, Notion, VS Code or Markdown comes in as a table.
+  from a web page, Notion, VS Code or Markdown comes in as a table; copied out, its cells are
+  tab-separated rows, which a spreadsheet takes as cells.
 - **A folder for your AI agent.** Share one folder with Claude Code, Claude Desktop or opencode,
   on your subscription, and the agent can read, change and add notes there through MCP, and see
   nothing else ([`Docs/AIAgents.md`](Docs/AIAgents.md)). It is the one way notes leave your

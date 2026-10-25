@@ -3,6 +3,7 @@ package com.syncednotes.mac
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.referentialEqualityPolicy
 import androidx.compose.runtime.setValue
 import com.syncednotes.core.Backup
 import com.syncednotes.core.Id
@@ -116,8 +117,12 @@ class NotesModel(
      */
     var namingNewFolderIn: Any? by mutableStateOf(null)
         private set
-    /** The note open in the editor. One selected note is simply the open note. */
-    var document: OpenNote? by mutableStateOf(null)
+    /**
+     * The note open in the editor. One selected note is simply the open note. Replaced by
+     * reference: an OpenNote equals any other of the same ID, so by Compose's default a version
+     * of the open note just taken in from the phone would be dropped, and the old one shown.
+     */
+    var document: OpenNote? by mutableStateOf(null, referentialEqualityPolicy())
         private set
     /** Notes selected together, when more than one is; none is open then. */
     var selectedNotes: Set<Id> by mutableStateOf(emptySet())

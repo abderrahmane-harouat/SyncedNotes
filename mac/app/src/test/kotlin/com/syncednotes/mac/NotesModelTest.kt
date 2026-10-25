@@ -63,6 +63,23 @@ class NotesModelTest {
     }
 
     @Test
+    fun aChangeFromThePhoneToTheNoteOnScreenIsShownInIt() {
+        val model = unlocked()
+        model.newNote()
+        composer.type("From the Mac", 0)
+        model.saveNow()
+        val id = model.summaries.single().id
+        val fromPhone = Note.newBuilder().setFormatVersion(1)
+            .addParagraphs(Paragraph.newBuilder().setText("From the phone").setRole(syncednotes.note.v1.Role.ROLE_TITLE)).build()
+        // As sync takes it in: into the model's own store, then the model is told which notes
+        // changed.
+        val store = NotesModel::class.java.getDeclaredField("store").apply { isAccessible = true }.get(model) as NoteStore
+        store.save(fromPhone, id, now = java.time.Instant.now().plusSeconds(5))
+        model.remoteChanged(setOf(id))
+        assertEquals("From the phone", composer.document.toString())
+    }
+
+    @Test
     fun aNoteLeftEmptyIsRemovedWhenAnotherIsChosen() {
         val model = unlocked()
         model.newNote()

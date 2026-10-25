@@ -25,6 +25,7 @@ import com.syncednotes.engine.render.DrawList
 import com.syncednotes.engine.render.FontFamily
 import com.syncednotes.engine.text.Alignment
 import com.syncednotes.engine.text.CharStyle
+import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.ListType
 
 /**
@@ -255,6 +256,32 @@ class NoteCanvasView(context: Context, fonts: FontFamily) : View(context), Compo
 
     override fun formatChanged() {
         onFormatChanged?.invoke()
+    }
+
+    /**
+     * The languages of the code block whose name was tapped, in a menu under the name: Android's
+     * menus open from a view, so a speck of one stands there while it is open.
+     */
+    override fun chooseCodeLanguage(paragraph: Int, current: CodeLanguage, x: Float, y: Float) {
+        val holder = parent as? android.view.ViewGroup ?: return
+        val anchor = View(context)
+        holder.addView(anchor, android.widget.FrameLayout.LayoutParams(1, 1).apply {
+            leftMargin = (left + x).toInt()
+            topMargin = (top + y).toInt()
+        })
+        anchor.post {
+            android.widget.PopupMenu(context, anchor).apply {
+                for (language in CodeLanguage.entries) {
+                    menu.add(if (language == CodeLanguage.NONE) "Plain code" else language.title).apply {
+                        isCheckable = true
+                        isChecked = language == current
+                        setOnMenuItemClickListener { composer.setBlockLanguage(paragraph, language, SystemClock.uptimeMillis()); true }
+                    }
+                }
+                setOnDismissListener { holder.removeView(anchor) }
+                show()
+            }
+        }
     }
 
     private companion object {

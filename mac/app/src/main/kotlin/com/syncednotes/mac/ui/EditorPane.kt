@@ -35,6 +35,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.syncednotes.core.Id
 import com.syncednotes.engine.layout.roleScale
+import com.syncednotes.engine.text.CalloutColor
 import com.syncednotes.engine.text.CharStyle
 import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.ListType
@@ -95,6 +96,20 @@ fun EditorPane(
         Box(Modifier.weight(1f).fillMaxWidth()) {
             // Always there, so the engine keeps its place; covered when no note is open.
             NoteCanvas(editor, Modifier.fillMaxSize())
+            // The languages of the code block whose name was clicked, just under the name.
+            editor.languageMenu?.let { menu ->
+                MenuPopup(
+                    true, { editor.languageMenu = null },
+                    CodeLanguage.entries.map { language ->
+                        MenuItem(if (language == CodeLanguage.NONE) "Plain Code" else language.title, checked = menu.current == language) {
+                            editor.languageMenu = null
+                            editor.composer.setBlockLanguage(menu.paragraph, language, now())
+                            editor.focus.requestFocus()
+                        }
+                    },
+                    offset = IntOffset(menu.x.toInt(), menu.y.toInt() + 4),
+                )
+            }
             if (open == null) {
                 Box(Modifier.fillMaxSize().background(c.window), contentAlignment = Alignment.Center) {
                     if (model.selectedNotes.size > 1) SelectedNotesPane(model, onConfirmDelete)
@@ -272,6 +287,11 @@ private fun FormatToolbar(editor: Editor, onInsertPicture: () -> Unit) {
                 ToolbarButton(Icons.code, "Code Block", { codeMenu = true }, selected = state?.role == Role.CODE_BLOCK, menu = true)
                 MenuPopup(codeMenu, { codeMenu = false }, codeItems(editor), offset = IntOffset(-40, 60))
             }
+            var calloutMenu by remember { mutableStateOf(false) }
+            Box {
+                ToolbarButton(Icons.callout, "Callout", { calloutMenu = true }, selected = state?.role == Role.CALLOUT, menu = true)
+                MenuPopup(calloutMenu, { calloutMenu = false }, calloutItems(editor), offset = IntOffset(-40, 60))
+            }
             // Samsung's attach button, for the one thing it attaches here: a picture.
             ToolbarButton(Icons.photo, "Insert Picture (⇧⌘P)", onInsertPicture)
         }
@@ -288,6 +308,21 @@ private fun Swatch(color: Color, face: @Composable () -> Unit) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
         Box(Modifier.height(17.dp), contentAlignment = Alignment.Center) { face() }
         Box(Modifier.size(14.dp, 3.dp).clip(RoundedCornerShape(1.5.dp)).background(color))
+    }
+}
+
+/**
+ * The callout colours, each with its panel's own shade beside it, in the look the note is in;
+ * the one there is ticked, and choosing it again puts the text back to body text.
+ */
+fun calloutItems(editor: Editor): List<MenuItem> {
+    val current = editor.format?.calloutColor
+    val shades = editor.composer.style.calloutColors
+    return CalloutColor.entries.map { color ->
+        MenuItem(color.title, checked = current == color, swatch = Color(shades[color.ordinal])) {
+            editor.composer.toggleCallout(color, now())
+            editor.focus.requestFocus()
+        }
     }
 }
 
@@ -388,6 +423,7 @@ private fun textStyleItems(editor: Editor): List<MenuItem> {
         act("Code Block", checked = state?.codeLanguage == CodeLanguage.NONE) { composer.toggleCodeBlock(CodeLanguage.NONE, now()) },
         act("C Code Block", checked = state?.codeLanguage == CodeLanguage.C) { composer.toggleCodeBlock(CodeLanguage.C, now()) },
         act("C++ Code Block", checked = state?.codeLanguage == CodeLanguage.CPP) { composer.toggleCodeBlock(CodeLanguage.CPP, now()) },
+        act("Callout", checked = state?.role == Role.CALLOUT) { composer.toggleCallout(state?.calloutColor ?: CalloutColor.BLUE, now()) },
         act("Inline Code", checked = state?.code == true) { composer.toggle(CharStyle.CODE, now()) },
         act("Dashed List", checked = state?.list == ListType.DASH) { composer.toggleList(ListType.DASH, now()) },
         act("Insert Divider") { composer.insertDivider(now()) },

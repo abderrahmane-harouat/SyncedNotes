@@ -43,6 +43,15 @@ public enum Role
    * <code>ROLE_DIVIDER = 7;</code>
    */
   ROLE_DIVIDER(7),
+  /**
+   * <pre>
+   * A callout: text set apart on a coloured panel, a note's aside. Paragraphs next to each
+   * other with the same callout colour are one callout.
+   * </pre>
+   *
+   * <code>ROLE_CALLOUT = 8;</code>
+   */
+  ROLE_CALLOUT(8),
   UNRECOGNIZED(-1),
   ;
 
@@ -78,6 +87,15 @@ public enum Role
    * <code>ROLE_DIVIDER = 7;</code>
    */
   public static final int ROLE_DIVIDER_VALUE = 7;
+  /**
+   * <pre>
+   * A callout: text set apart on a coloured panel, a note's aside. Paragraphs next to each
+   * other with the same callout colour are one callout.
+   * </pre>
+   *
+   * <code>ROLE_CALLOUT = 8;</code>
+   */
+  public static final int ROLE_CALLOUT_VALUE = 8;
 
 
   @java.lang.Override
@@ -108,6 +126,7 @@ public enum Role
       case 5: return ROLE_CODE_BLOCK;
       case 6: return ROLE_CHECKLIST;
       case 7: return ROLE_DIVIDER;
+      case 8: return ROLE_CALLOUT;
       default: return null;
     }
   }

@@ -18,6 +18,13 @@ interface ComposerHost {
 
     /** The formatting under the caret may have changed; refresh the Text options panel. */
     fun formatChanged() {}
+
+    /**
+     * The language named at the top of a code block was clicked or tapped: show the languages
+     * at ([x], [y]) in view pixels, just under the name, and call [Composer.setBlockLanguage]
+     * with the one chosen for the block starting at [paragraph].
+     */
+    fun chooseCodeLanguage(paragraph: Int, current: com.syncednotes.engine.text.CodeLanguage, x: Float, y: Float) {}
 }
 
 enum class PointerAction { DOWN, MOVE, UP, CANCEL }

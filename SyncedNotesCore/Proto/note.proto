@@ -49,6 +49,19 @@ message Paragraph {
   // coloured by. Every paragraph of one block carries the same. The colours themselves are
   // never stored; they are the app's, for its light or dark look.
   CodeLanguage language = 10;
+  // Only for a callout: which of the callout colours its panel is. Named, never RGB, so it is
+  // drawn in the shade that reads on the light look or the dark one.
+  CalloutColor callout = 11;
+}
+
+enum CalloutColor {
+  // Blue, a callout's colour unless another is chosen.
+  CALLOUT_COLOR_BLUE = 0;
+  CALLOUT_COLOR_GREEN = 1;
+  CALLOUT_COLOR_ORANGE = 2;
+  CALLOUT_COLOR_PURPLE = 3;
+  CALLOUT_COLOR_PINK = 4;
+  CALLOUT_COLOR_GRAY = 5;
 }
 
 enum CodeLanguage {
@@ -67,6 +80,9 @@ enum Role {
   ROLE_CODE_BLOCK = 5;
   ROLE_CHECKLIST = 6;
   ROLE_DIVIDER = 7;
+  // A callout: text set apart on a coloured panel, a note's aside. Paragraphs next to each
+  // other with the same callout colour are one callout.
+  ROLE_CALLOUT = 8;
 }
 
 message ListLevel {

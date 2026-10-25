@@ -1,5 +1,6 @@
 package com.syncednotes.engine.paste
 
+import com.syncednotes.engine.text.CalloutColor
 import com.syncednotes.engine.text.CharStyle
 import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.ListKind
@@ -23,6 +24,7 @@ object MarkdownReader {
     private val ITEM = Regex("^(\\s*)([-*+]|\\d{1,9}[.)])\\s+(.*)$")
     private val TASK = Regex("^\\[([ xX])]\\s+(.*)$")
     private val QUOTE = Regex("^ {0,3}>\\s?(.*)$")
+    private val CALLOUT = Regex("^ {0,3}>\\s?\\[!([A-Za-z]+)][+-]?\\s*(.*)$")
     private val TABLE_ROW = Regex("^\\s*\\|.*\\|\\s*$")
     private val TABLE_RULE = Regex("^\\s*\\|?\\s*:?-{2,}:?\\s*(\\|\\s*:?-{2,}:?\\s*)*\\|?\\s*$")
     private val SETEXT = Regex("^ {0,3}(=+|-+)\\s*$")
@@ -128,6 +130,36 @@ object MarkdownReader {
                 blank()
                 inline(out, line.trim(), ParagraphStyle(role = if (next.trim().startsWith("=")) Role.TITLE else Role.HEADING), heading = true)
                 i += 2
+                continue
+            }
+            val callout = CALLOUT.matchEntire(line)
+            if (callout != null) {
+                lists.clear()
+                blank()
+                val color = calloutColorNamed(callout.groupValues[1])
+                // A title after the kind, as Obsidian has, is the callout's first line, in bold.
+                val title = callout.groupValues[2].trim()
+                if (title.isNotEmpty()) inline(out, "**$title**", ParagraphStyle(role = Role.CALLOUT, callout = color))
+                i++
+                // Items next to each other in the callout are one list, so its numbers run on.
+                var list: ListLevel? = null
+                while (i < lines.size) {
+                    // Another kind marker is a callout of its own, straight after this one.
+                    if (CALLOUT.matches(lines[i])) break
+                    val inner = QUOTE.matchEntire(lines[i]) ?: break
+                    val content = inner.groupValues[1]
+                    val item = ITEM.matchEntire(content)
+                    if (item != null) {
+                        val kind = if (item.groupValues[2][0].isDigit()) ListKind.NUMBER else ListKind.BULLET
+                        val level = list?.takeIf { it.kind == kind } ?: ListLevel(kind, ++listIds)
+                        list = level
+                        inline(out, item.groupValues[3], ParagraphStyle(role = Role.CALLOUT, callout = color, lists = listOf(level)))
+                    } else {
+                        list = null
+                        inline(out, content, ParagraphStyle(role = Role.CALLOUT, callout = color))
+                    }
+                    i++
+                }
                 continue
             }
             val quote = QUOTE.matchEntire(line)
@@ -293,4 +325,17 @@ object MarkdownReader {
     }
 
     private const val ESCAPABLE = "\\`*_{}[]()#+-.!|~>"
+
+    /**
+     * The colour for a callout's kind: GitHub's alerts and Obsidian's callouts, by what they
+     * mean, and the colours by their names; any other kind is blue, a callout's own colour.
+     */
+    fun calloutColorNamed(name: String): CalloutColor = when (name.lowercase()) {
+        "tip", "hint", "success", "check", "done", "green" -> CalloutColor.GREEN
+        "warning", "attention", "orange", "yellow" -> CalloutColor.ORANGE
+        "important", "abstract", "summary", "tldr", "purple" -> CalloutColor.PURPLE
+        "caution", "danger", "error", "bug", "failure", "fail", "pink", "red" -> CalloutColor.PINK
+        "gray", "grey", "quote", "cite", "example" -> CalloutColor.GRAY
+        else -> CalloutColor.BLUE
+    }
 }

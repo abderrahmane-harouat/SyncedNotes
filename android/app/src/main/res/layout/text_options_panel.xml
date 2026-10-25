@@ -119,5 +119,9 @@
                     android:layout_weight="1" android:gravity="center" android:textColor="@color/size_label" android:textSize="14sp" />
             </LinearLayout>
         </LinearLayout>
+
+        <!-- A callout in each of its colours, one tap each; filled in by TextOptionsPanel. -->
+        <LinearLayout android:id="@+id/callouts" style="@style/PanelGroup" android:layout_width="260dp"
+            android:layout_gravity="center_horizontal" android:layout_marginTop="8dp" android:layoutDirection="ltr" />
     </LinearLayout>
 </FrameLayout>

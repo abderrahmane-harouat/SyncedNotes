@@ -1,6 +1,7 @@
 package com.syncednotes.engine.editor
 
 import com.syncednotes.engine.code.TokenKind
+import com.syncednotes.engine.text.CalloutColor
 
 /** Sizes in pixels and colours as 0xAARRGGBB. Defaults follow Samsung Notes' text editor. */
 data class EditorStyle(
@@ -60,6 +61,31 @@ data class EditorStyle(
     val findEdge: Float = 1f,
     /** Pixels per point, for a picture's own size: a picture is shown at its size unless wider than the note. */
     val pictureScale: Float = 1f,
+    /**
+     * A code block's padding above its first line, which holds the language's name and the
+     * button that changes it, and below its last; the name's size and colour.
+     */
+    val codePaddingTop: Float = 0f,
+    val codePaddingBottom: Float = 0f,
+    val codeLabelSize: Float = 0f,
+    val codeLabelColor: Int = 0x99000000.toInt(),
+    /** Room outside a code block's panel, between it and the text above and below. */
+    val codeMargin: Float = 0f,
+    /**
+     * A callout: its text's room from its panel's sides, above and below, and the room outside
+     * the panel; its corners; the panel's colour for each [CalloutColor], in their order.
+     */
+    val calloutPadding: Float = 0f,
+    val calloutPaddingVertical: Float = 0f,
+    val calloutMargin: Float = 0f,
+    val calloutCornerRadius: Float = 0f,
+    val calloutColors: List<Int> = calloutColors(dark = false),
+    /**
+     * Behind inline code: a chip, see-through so it reads the same on the page and on any
+     * callout's panel; 0 for none. Its corners.
+     */
+    val inlineCodeBackground: Int = 0,
+    val inlineCodeRadius: Float = 0f,
     /** The colour of each [TokenKind] in a code block with a language, in the kinds' order. */
     val codeColors: List<Int> = codeColors(dark = false),
 ) {
@@ -70,6 +96,29 @@ data class EditorStyle(
     val lineHeight: Float get() = textSize * lineSpacing
 
     companion object {
+        /**
+         * The callout panels' colours: soft tints of each hue on a light page, deep ones on a dark
+         * page, each light or dark enough that the text's own colour reads on it unchanged.
+         */
+        fun calloutColors(dark: Boolean): List<Int> {
+            val byColor = if (dark) mapOf(
+                CalloutColor.BLUE to 0xFF1E2A3E,
+                CalloutColor.GREEN to 0xFF1C3124,
+                CalloutColor.ORANGE to 0xFF3A2B1B,
+                CalloutColor.PURPLE to 0xFF2C2440,
+                CalloutColor.PINK to 0xFF3A2130,
+                CalloutColor.GRAY to 0xFF2C2C2E,
+            ) else mapOf(
+                CalloutColor.BLUE to 0xFFE3EDFD,
+                CalloutColor.GREEN to 0xFFE3F4E7,
+                CalloutColor.ORANGE to 0xFFFBEBDA,
+                CalloutColor.PURPLE to 0xFFECE5F8,
+                CalloutColor.PINK to 0xFFFBE5EE,
+                CalloutColor.GRAY to 0xFFF0F0F2,
+            )
+            return CalloutColor.entries.map { byColor.getValue(it).toInt() }
+        }
+
         /**
          * Code's colours on a light page and a dark one: those of the default themes of the
          * editors people write C in, so code in a note reads as code they know. Each is
@@ -139,7 +188,19 @@ data class EditorStyle(
                 // Ticked items are struck through and faded to 40% (102/255).
                 checkedTextAlpha = 0.4f,
                 quoteIndent = 20f * density,
-                codeIndent = 12f * density,
+                codeIndent = 14f * density,
+                codePaddingTop = 28f * density,
+                codePaddingBottom = 10f * density,
+                codeLabelSize = 12f * density,
+                codeLabelColor = if (dark) 0x99FFFFFF.toInt() else 0x8A000000.toInt(),
+                codeMargin = 6f * density,
+                calloutPadding = 14f * density,
+                calloutPaddingVertical = 12f * density,
+                calloutMargin = 6f * density,
+                calloutCornerRadius = 12f * density,
+                calloutColors = calloutColors(dark),
+                inlineCodeBackground = if (dark) 0x24FFFFFF else 0x14000000,
+                inlineCodeRadius = 4f * density,
                 quoteBarWidth = 3f * density,
                 quoteBarColor = if (dark) 0x40FFFFFF else 0x33000000,
                 codeBackground = if (dark) 0x14FFFFFF else 0x0F000000,
@@ -193,9 +254,22 @@ data class EditorStyle(
             checkboxColor = if (dark) 0xFF98989D.toInt() else 0xFF8E8E93.toInt(),
             checkedTextAlpha = 0.5f,
             handles = false,
-            // A quote 20 pt in with a bar beside it, a code block 12 pt in on a panel.
+            // A quote 20 pt in with a bar beside it, a code block 16 pt in on a panel, its
+            // language named in the room above its first line.
             quoteIndent = 20f * scale,
-            codeIndent = 12f * scale,
+            codeIndent = 16f * scale,
+            codePaddingTop = 26f * scale,
+            codePaddingBottom = 10f * scale,
+            codeLabelSize = 11f * scale,
+            codeLabelColor = if (dark) 0x99FFFFFF.toInt() else 0x8A000000.toInt(),
+            codeMargin = 6f * scale,
+            calloutPadding = 16f * scale,
+            calloutPaddingVertical = 12f * scale,
+            calloutMargin = 5f * scale,
+            calloutCornerRadius = 10f * scale,
+            calloutColors = calloutColors(dark),
+            inlineCodeBackground = if (dark) 0x24FFFFFF else 0x14000000,
+            inlineCodeRadius = 4f * scale,
             quoteBarWidth = 3f * scale,
             quoteBarColor = if (dark) 0x40FFFFFF else 0x40000000,
             codeBackground = if (dark) 0x14FFFFFF else 0x0D000000,

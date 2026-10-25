@@ -10,6 +10,7 @@ import android.widget.PopupMenu
 import android.widget.TextView
 import com.syncednotes.engine.editor.Composer
 import com.syncednotes.engine.text.Alignment
+import com.syncednotes.engine.text.CalloutColor
 import com.syncednotes.engine.text.CharStyle
 import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.ListType
@@ -45,6 +46,19 @@ class TextOptionsPanel(context: Context, private val composer: Composer) :
     private val outdent = button(R.id.outdent)
     private val divider = button(R.id.divider)
     private val spacing = content.findViewById<View>(R.id.line_spacing)
+    /** The callout colours, as round swatches in the panel shades they give. */
+    private val callouts: List<Pair<View, CalloutColor>> = content.findViewById<android.widget.LinearLayout>(R.id.callouts).let { row ->
+        val density = context.resources.displayMetrics.density
+        CalloutColor.entries.mapIndexed { i, color ->
+            if (i > 0) row.addView(android.widget.Space(context), android.widget.LinearLayout.LayoutParams(0, 1, 1f))
+            val swatch = View(context).apply {
+                contentDescription = "${context.getString(R.string.callout)}, ${color.title}"
+                setOnClickListener { composer.toggleCallout(color, now()) }
+            }
+            row.addView(swatch, android.widget.LinearLayout.LayoutParams((26 * density).toInt(), (26 * density).toInt()))
+            swatch to color
+        }
+    }
     private val spacingLabel = content.findViewById<TextView>(R.id.line_spacing_label)
 
     private fun now() = SystemClock.uptimeMillis()
@@ -99,6 +113,17 @@ class TextOptionsPanel(context: Context, private val composer: Composer) :
         setEnabled(indent, s.canIndent)
         setEnabled(outdent, s.canOutdent)
         spacingLabel.text = SPACINGS.firstOrNull { it.second == s.lineSpacing }?.first ?: ""
+        val density = content.resources.displayMetrics.density
+        for ((view, color) in callouts) {
+            // The panel's own shade, edged so a pale one shows on the card; ringed in blue when on.
+            val on = s.calloutColor == color
+            view.background = android.graphics.drawable.GradientDrawable().apply {
+                shape = android.graphics.drawable.GradientDrawable.OVAL
+                setColor(composer.style.calloutColors[color.ordinal])
+                setStroke(((if (on) 2.5f else 1f) * density).toInt(), if (on) 0xFF3E91F7.toInt() else 0x33000000)
+            }
+            view.isSelected = on
+        }
     }
 
     private fun setEnabled(button: View, enabled: Boolean) {

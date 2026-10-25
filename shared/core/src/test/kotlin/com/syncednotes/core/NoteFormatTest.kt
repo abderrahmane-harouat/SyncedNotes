@@ -1,6 +1,7 @@
 package com.syncednotes.core
 
 import com.google.protobuf.ByteString
+import com.syncednotes.engine.text.CalloutColor
 import com.syncednotes.engine.text.CharStyle
 import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.ListKind
@@ -12,6 +13,7 @@ import kotlin.test.assertEquals
 import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import syncednotes.note.v1.Alignment
+import syncednotes.note.v1.CalloutColor as StoredCalloutColor
 import syncednotes.note.v1.CodeLanguage as StoredCodeLanguage
 import syncednotes.note.v1.Color
 import syncednotes.note.v1.Direction
@@ -154,6 +156,24 @@ class NoteFormatTest {
     fun aCodeLanguageThisAppDoesNotKnowYetOpensTheNoteReadOnly() {
         val fromANewerApp = note(paragraph("fn main() {}", StoredRole.ROLE_CODE_BLOCK).setLanguageValue(99))
         assertFalse(NoteFormat.canEdit(fromANewerApp))
+    }
+
+    @Test
+    fun aCalloutsColourIsSavedWithItAndComesBackTheSame() {
+        val stored = note(
+            paragraph("Stack", StoredRole.ROLE_CALLOUT),
+            paragraph("Heap", StoredRole.ROLE_CALLOUT).setCallout(StoredCalloutColor.CALLOUT_COLOR_GREEN),
+            paragraph("Data", StoredRole.ROLE_CALLOUT).setCallout(StoredCalloutColor.CALLOUT_COLOR_ORANGE),
+        )
+        assertTrue(NoteFormat.canEdit(stored))
+        val document = decoded(stored)
+        assertEquals(listOf(CalloutColor.BLUE, CalloutColor.GREEN, CalloutColor.ORANGE), (0..2).map { document.paragraphStyle(it).callout })
+        assertEquals(stored, NoteFormat().encode(document))
+    }
+
+    @Test
+    fun aCalloutColourThisAppDoesNotKnowYetOpensTheNoteReadOnly() {
+        assertFalse(NoteFormat.canEdit(note(paragraph("aside", StoredRole.ROLE_CALLOUT).setCalloutValue(42))))
     }
 
     @Test

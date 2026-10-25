@@ -1,5 +1,6 @@
 package com.syncednotes.engine.editor
 
+import com.syncednotes.engine.layout.CaretRect
 import com.syncednotes.engine.layout.DocumentLayout
 import com.syncednotes.engine.layout.ParagraphLayout
 import com.syncednotes.engine.layout.StyleRuns
@@ -11,6 +12,7 @@ import com.syncednotes.engine.render.PathBuilder
 import com.syncednotes.engine.layout.roleScale
 import com.syncednotes.engine.text.Alignment
 import com.syncednotes.engine.text.Boundaries
+import com.syncednotes.engine.text.CalloutColor
 import com.syncednotes.engine.text.CharStyle
 import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.Direction
@@ -50,6 +52,10 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     private val layout = DocumentLayout(
         document, fonts, style.sizeUnit, style.defaultSize, style.lineSpacing, style.indentWidth, style.listMarkerWidth,
         style.quoteIndent, style.codeIndent, style.pictureScale,
+        codeTop = style.codeMargin + style.codePaddingTop, codeBottom = style.codePaddingBottom + style.codeMargin,
+        calloutIndent = style.calloutPadding,
+        calloutTop = style.calloutMargin + style.calloutPaddingVertical,
+        calloutBottom = style.calloutPaddingVertical + style.calloutMargin,
     )
 
     /** Where the note's pictures come from; none shows each as an empty frame. */
@@ -556,6 +562,8 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val lineSpacing: Float? = 1f,
         /** The language, when every paragraph is a code block in the same one; null otherwise. */
         val codeLanguage: CodeLanguage? = null,
+        /** The colour, when every paragraph is a callout of the same one; null otherwise. */
+        val calloutColor: CalloutColor? = null,
     ) {
         fun has(style: CharStyle): Boolean = when (style) {
             CharStyle.BOLD -> bold
@@ -600,6 +608,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             role = styles.map { it.role }.distinct().singleOrNull(),
             lineSpacing = styles.map { if (it.lineSpacing == 0f) 1f else it.lineSpacing }.distinct().singleOrNull(),
             codeLanguage = styles.takeIf { all -> all.all { it.role == Role.CODE_BLOCK } }?.map { it.language }?.distinct()?.singleOrNull(),
+            calloutColor = styles.takeIf { all -> all.all { it.role == Role.CALLOUT } }?.map { it.callout }?.distinct()?.singleOrNull(),
         )
     }
 
@@ -780,6 +789,76 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     }
 
     /**
+     * A callout of [color] for the selected paragraphs: text set apart on a coloured panel. The
+     * whole of every callout they touch takes the colour, so a caret anywhere in one recolours
+     * all of it. Choosing the colour they already are puts them back to body text, as choosing
+     * a role they have does.
+     */
+    fun toggleCallout(color: CalloutColor, now: Long) {
+        val range = selectedParagraphs().filter { !document.paragraphStyle(it).isObject }
+        if (range.isEmpty()) return
+        if (range.all { document.paragraphStyle(it).let { s -> s.role == Role.CALLOUT && s.callout == color } }) {
+            formatEdit(now) { for (p in range) document.setParagraphStyle(p, document.paragraphStyle(p).copy(role = Role.BODY)) }
+            return
+        }
+        var first = range.first()
+        while (first > 0 && document.paragraphStyle(first).role == Role.CALLOUT && layout.samePanel(first - 1, first)) first--
+        var last = range.last()
+        while (last + 1 < document.paragraphCount && document.paragraphStyle(last).role == Role.CALLOUT && layout.samePanel(last, last + 1)) last++
+        formatEdit(now) {
+            for (p in first..last) {
+                val s = document.paragraphStyle(p)
+                if (p in range || s.role == Role.CALLOUT) {
+                    // A checklist item made a callout stops being an item; a list item keeps its list.
+                    document.setParagraphStyle(p, s.copy(role = Role.CALLOUT, callout = color, checked = false, language = CodeLanguage.NONE))
+                }
+            }
+        }
+    }
+
+    /**
+     * Gives the whole code block that paragraph [paragraph] is in the [language] its syntax is
+     * coloured by: what choosing from the name at the top of the block does.
+     */
+    fun setBlockLanguage(paragraph: Int, language: CodeLanguage, now: Long) {
+        if (paragraph !in 0 until document.paragraphCount || document.paragraphStyle(paragraph).role != Role.CODE_BLOCK) return
+        var first = paragraph
+        while (first > 0 && document.paragraphStyle(first - 1).role == Role.CODE_BLOCK) first--
+        var last = paragraph
+        while (last + 1 < document.paragraphCount && document.paragraphStyle(last + 1).role == Role.CODE_BLOCK) last++
+        formatEdit(now) { for (p in first..last) document.setParagraphStyle(p, document.paragraphStyle(p).copy(language = language)) }
+    }
+
+    /**
+     * Where the language's name and its chevron are drawn at the top of the code block
+     * starting at [p], in view pixels: left, top, right, bottom.
+     */
+    private fun codeLabelBox(p: Int, pl: ParagraphLayout, top: Float): FloatArray {
+        val size = style.codeLabelSize
+        val run = layout.markerRun(document.paragraphStyle(p).language.title, size)
+        val width = run.advances.sum() + size * 0.9f
+        val left = originX + pl.textLeft
+        val labelTop = top + (style.codePaddingTop - size * 1.6f) / 2f + size * 0.15f
+        return floatArrayOf(left, labelTop, left + width, labelTop + size * 1.6f)
+    }
+
+    /** Opens the languages, if the click is on the name at the top of a code block. */
+    private fun tapCodeLanguage(x: Float, y: Float): Boolean {
+        if (!editable || style.codePaddingTop <= 0f) return false
+        val docY = y - originY
+        val p = layout.paragraphAtY(docY)
+        if (!layout.isBlockStart(p)) return false
+        val top = originY + layout.paragraphTop(p) + style.codeMargin
+        if (y > top + style.codePaddingTop) return false
+        val box = codeLabelBox(p, layout.paragraph(p), top)
+        // A little room around the small name, so it is easy to hit.
+        val slop = style.touchSlop
+        if (x < box[0] - slop || x > box[2] + slop || y < box[1] - slop || y > box[3] + slop) return false
+        host.chooseCodeLanguage(p, document.paragraphStyle(p).language, box[0], box[3])
+        return true
+    }
+
+    /**
      * The language of code already among [range], or of the block just above it, or else just
      * below; NONE when there is none.
      */
@@ -923,6 +1002,8 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     private fun stepOut(s: ParagraphStyle): ParagraphStyle? = when {
         s.depth > 1 -> s.copy(lists = s.lists.dropLast(1))
         s.list != ListType.NONE -> withoutList(s)
+        // Return on an empty line in a callout ends the callout, as it ends a list.
+        s.role == Role.CALLOUT -> s.copy(role = Role.BODY)
         s.indent > 0 -> s.copy(indent = s.indent - 1)
         else -> null
     }
@@ -1066,16 +1147,49 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         select(if (shift) Selection(selection.anchor, t) else Selection(t), now)
     }
 
+    /**
+     * A code block at the very end of a note has no line below it to go on to, and Return
+     * only adds a line of code, so the caret could never leave it. Going below its last line,
+     * by the down arrow or a tap under it, adds a line of plain text there, as Notion does.
+     */
+    private fun leaveCodeAtEnd(now: Long): Boolean {
+        val last = document.paragraphCount - 1
+        if (!editable || document.paragraphStyle(last).role != Role.CODE_BLOCK) return false
+        val end = document.length
+        clearComposing()
+        edit(end, end, "\n", Selection(end + 1), now, mergeable = false, fromInput = false) {
+            document.setParagraphStyle(last + 1, ParagraphStyle.DEFAULT)
+        }
+        return true
+    }
+
     private fun moveVertically(key: Key, shift: Boolean, now: Long) {
+        if (key == Key.DOWN && !shift && selection.isCollapsed &&
+            layout.lineBounds(selection.focus, selection.upstream).last == document.length && leaveCodeAtEnd(now)
+        ) return
         val r = layout.caretRect(selection.focus, selection.upstream)
         val x = if (goalX.isNaN()) r.x else goalX
-        val distance = when (key) {
-            Key.UP -> -style.lineHeight
-            Key.DOWN -> style.lineHeight
-            Key.PAGE_UP -> -(viewHeight - insetTop - insetBottom)
-            else -> viewHeight - insetTop - insetBottom
+        fun middle(c: CaretRect) = (c.top + c.bottom) / 2
+        // Up and down go to the line itself rather than a line's height away: the room around
+        // a code block or a callout is taller than a line, and a step of one only reached it,
+        // so the caret could never leave the block.
+        val focus = selection.focus
+        val line = layout.lineBounds(focus, selection.upstream)
+        val p = document.paragraphAt(focus)
+        val y = when (key) {
+            Key.DOWN -> when {
+                line.last < document.paragraphEnd(p) -> middle(layout.caretRect(line.last, false))
+                p + 1 < document.paragraphCount -> middle(layout.caretRect(document.paragraphStart(p + 1), false))
+                else -> layout.height
+            }
+            Key.UP -> when {
+                line.first > document.paragraphStart(p) -> middle(layout.caretRect(line.first, true))
+                p > 0 -> middle(layout.caretRect(document.paragraphEnd(p - 1), false))
+                else -> -1f
+            }
+            Key.PAGE_UP -> middle(r) - (viewHeight - insetTop - insetBottom)
+            else -> middle(r) + viewHeight - insetTop - insetBottom
         }
-        val y = (r.top + r.bottom) / 2 + distance
         val (target, upstream) = when {
             y < 0 -> 0 to false
             y >= layout.height -> document.length to false
@@ -1185,6 +1299,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
 
     private fun tap(x: Float, y: Float, now: Long) {
         if (tapCheckbox(x, y, now)) return
+        if (tapCodeLanguage(x, y)) return
         val isDouble = now - lastTapTime < style.doubleTapMs && hypot(x - lastTapX, y - lastTapY) < style.touchSlop * 4
         focused = true
         host.showKeyboard()
@@ -1196,6 +1311,10 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         lastTapTime = now
         lastTapX = x
         lastTapY = y
+        if (y - originY > layout.height && leaveCodeAtEnd(now)) {
+            insertionHandleUntil = now + style.insertionHandleMs
+            return
+        }
         val (offset, upstream) = offsetAtView(x, y)
         insertionHandleUntil = now + style.insertionHandleMs
         select(Selection(offset, upstream = upstream), now)
@@ -1316,7 +1435,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             PointerAction.DOWN -> {
                 flingVelocity = 0f
                 focused = true
-                if (!shift && clicks == 1 && tapCheckbox(x, y, now)) {
+                if (!shift && clicks == 1 && (tapCheckbox(x, y, now) || tapCodeLanguage(x, y))) {
                     mouseDrag = MouseDrag.NONE
                     return
                 }
@@ -1588,6 +1707,20 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                 if (runs.highlights[r] != 0) list.rect(x0, lineTop, x1 - x0, lineHeight, runs.highlights[r])
             }
 
+            // Inline code on a chip of its own, as code in a sentence is shown on the web; a code
+            // block, all code, has its panel instead.
+            if (pstyle.role != Role.CODE_BLOCK && style.inlineCodeBackground != 0) forEachRun(pl, line) { r, x0, x1 ->
+                if (runs.has(r, CharStyle.CODE)) {
+                    val size = runs.sizes[r]
+                    val pad = size * 0.12f
+                    val chipTop = baselineY - size * 0.95f
+                    val chipBottom = baselineY + size * 0.32f
+                    path.reset()
+                    roundRectInto(x0 - pad, chipTop, x1 - x0 + 2 * pad, chipBottom - chipTop, minOf(style.inlineCodeRadius, size * 0.3f), clockwise = true)
+                    list.path(style.inlineCodeBackground, path)
+                }
+            }
+
             drawMatches(list, pl, line, base, ls, le, lineTop, lineHeight)
 
             if (!sel.isCollapsed) {
@@ -1738,9 +1871,26 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                 val roundTop = p == 0 || document.paragraphStyle(p - 1).role != Role.CODE_BLOCK
                 val roundBottom = p + 1 >= document.paragraphCount || document.paragraphStyle(p + 1).role != Role.CODE_BLOCK
                 val r = minOf(style.codeCornerRadius, pl.height / 2)
+                // The panel stops short of the block's margin, which keeps it off the text around.
+                val panelTop = Math.round(if (roundTop) top + style.codeMargin else top).toFloat()
+                val panelBottom = Math.round(if (roundBottom) top + pl.height - style.codeMargin else top + pl.height).toFloat()
                 path.reset()
-                panelInto(left, top, right, top + pl.height, if (roundTop) r else 0f, if (roundBottom) r else 0f)
+                panelInto(left, panelTop, right, panelBottom, if (roundTop) r else 0f, if (roundBottom) r else 0f)
                 list.path(style.codeBackground, path)
+                if (roundTop && style.codePaddingTop > 0f) drawCodeLabel(list, p, pl, panelTop)
+            }
+            Role.CALLOUT -> {
+                // One panel for each callout, the whole width of the note, rounded at its two
+                // ends and held off the text around by its margin.
+                val start = layout.isPanelStart(p)
+                val end = layout.isPanelEnd(p)
+                // On whole pixels, so the slices each line draws meet without a seam.
+                val panelTop = Math.round(if (start) top + style.calloutMargin else top).toFloat()
+                val panelBottom = Math.round(if (end) top + pl.height - style.calloutMargin else top + pl.height).toFloat()
+                val r = minOf(style.calloutCornerRadius, (panelBottom - panelTop) / 2)
+                path.reset()
+                panelInto(originX, panelTop, originX + layout.width, panelBottom, if (start) r else 0f, if (end) r else 0f)
+                list.path(style.calloutColors[ps.callout.ordinal], path)
             }
             Role.DIVIDER -> {
                 val y = top + pl.height / 2 - style.dividerThickness / 2
@@ -1748,6 +1898,35 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             }
             else -> {}
         }
+    }
+
+    /**
+     * The block's language at its top, small and quiet, with a chevron that says it can be
+     * changed there: the way code shown on the web names its language.
+     */
+    private fun drawCodeLabel(list: DrawList, p: Int, pl: ParagraphLayout, top: Float) {
+        val size = style.codeLabelSize
+        val box = codeLabelBox(p, pl, top)
+        val run = layout.markerRun(document.paragraphStyle(p).language.title, size)
+        val baseline = box[1] + size * 1.15f
+        var x = box[0]
+        for (i in 0 until run.count) {
+            if (i == glyphIds.size) growGlyphScratch()
+            glyphIds[i] = run.glyphs[i]
+            glyphXs[i] = x + run.offsetsX[i]
+            glyphYs[i] = baseline + run.offsetsY[i]
+            x += run.advances[i]
+        }
+        if (run.count > 0) list.glyphs(run.fontIds[0], size, style.codeLabelColor, run.count, glyphIds, glyphXs, glyphYs)
+        // A small chevron pointing down, drawn as two strokes.
+        val w = size * 0.5f
+        val cx = x + size * 0.25f + w / 2f
+        val cy = baseline - size * 0.32f
+        val half = maxOf(0.6f, size * 0.06f)
+        path.reset()
+        segment(cx - w / 2f, cy - w / 4f, cx, cy + w / 4f, half)
+        segment(cx, cy + w / 4f, cx + w / 2f, cy - w / 4f, half)
+        list.path(style.codeLabelColor, path)
     }
 
     /**

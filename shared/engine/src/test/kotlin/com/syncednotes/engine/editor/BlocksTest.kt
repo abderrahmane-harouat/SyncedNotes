@@ -211,6 +211,53 @@ class BlocksTest {
     }
 
     @Test
+    fun theDownArrowOnTheLastLineOfACodeBlockAtTheEndOfANoteGoesOnToANewLineOfText() {
+        val c = composer("int a;\nint b;")
+        c.setSelectionFromInput(0, c.document.length, 0)
+        c.toggleCodeBlock(CodeLanguage.C, 0)
+        c.caretTo(9)
+        c.onKey(Key.DOWN, false, false, 10)
+        assertEquals(3, c.document.paragraphCount)
+        assertEquals(Role.CODE_BLOCK, c.style(1).role)
+        assertEquals(Role.BODY, c.style(2).role)
+        assertEquals(CodeLanguage.NONE, c.style(2).language)
+        assertEquals(c.document.length, c.selection.start)
+        c.type("done", 20)
+        assertEquals("int a;\nint b;\ndone", c.document.toString())
+        // Down again on plain text at the end adds nothing.
+        c.onKey(Key.DOWN, false, false, 30)
+        assertEquals(3, c.document.paragraphCount)
+        // One undo takes the line away again.
+        c.undo(40)
+        c.undo(50)
+        assertEquals("int a;\nint b;", c.document.toString())
+    }
+
+    @Test
+    fun theArrowsGoLineByLineIntoAndOutOfACodeBlockWhateverItsPadding() {
+        val c = composer("before\nint a;\nint b;\nafter")
+        c.setSelectionFromInput(8, 16, 0)
+        c.toggleCodeBlock(CodeLanguage.C, 0)
+        c.caretTo(3)
+        val down = (1..3).map { c.onKey(Key.DOWN, false, false, 10L * it); c.document.paragraphAt(c.selection.start) }
+        assertEquals(listOf(1, 2, 3), down)
+        val up = (1..3).map { c.onKey(Key.UP, false, false, 100L + it); c.document.paragraphAt(c.selection.start) }
+        assertEquals(listOf(2, 1, 0), up)
+        assertEquals(4, c.document.paragraphCount)
+    }
+
+    @Test
+    fun aTapBelowACodeBlockAtTheEndOfANoteStartsALineOfTextUnderIt() {
+        val c = composer("int a;")
+        c.toggleCodeBlock(CodeLanguage.C, 0)
+        c.onPointer(PointerEvent(PointerAction.DOWN, 100f, 1500f, 1000))
+        c.onPointer(PointerEvent(PointerAction.UP, 100f, 1500f, 1050))
+        assertEquals(2, c.document.paragraphCount)
+        assertEquals(Role.BODY, c.style(1).role)
+        assertEquals(c.document.length, c.selection.start)
+    }
+
+    @Test
     fun aLineMadeCodeUnderABlockJoinsItInItsLanguage() {
         val c = composer("int a;\nint b;")
         c.caretTo(0)
@@ -235,6 +282,50 @@ class BlocksTest {
         c.toggleCodeBlock(CodeLanguage.CPP, 1000)
         c.undo(2000)
         assertEquals(CodeLanguage.C, c.style(0).language)
+    }
+
+    @Test
+    fun aCodeBlocksTextKeepsClearOfItsPanelWithItsLanguageNamedAbove() {
+        val c = composer("above\nint a;\nint b;\nbelow")
+        c.setSelectionFromInput(6, 19, 0)
+        c.toggleCodeBlock(CodeLanguage.C, 0)
+        fun lineTop(offset: Int): Float { c.caretTo(offset); return c.caretInView()[1] }
+        val plainGap = lineTop(19 + 1) - lineTop(13)
+        // The first line sits below the room for the language's name, the next straight after it.
+        assertTrue(lineTop(6) - lineTop(0) > c.style.lineHeight + c.style.codePaddingTop)
+        assertEquals(c.style.lineHeight, lineTop(13) - lineTop(6), 1f)
+        // And the text after the block is held off by the room at its foot.
+        assertTrue(plainGap > c.style.lineHeight + c.style.codePaddingBottom)
+    }
+
+    @Test
+    fun clickingTheLanguageAtTheTopOfABlockAsksForTheLanguagesAndChoosingOneChangesTheBlock() {
+        val host = RecordingHost()
+        val c = Composer(TestFonts.family, EditorStyle.macLike(2f), host)
+        c.setViewport(1200, 2000, 0f, 0f)
+        c.type("int a;\nint b;", 0)
+        c.setSelectionFromInput(0, 13, 0)
+        c.toggleCodeBlock(CodeLanguage.C, 0)
+        val x = c.style.paddingLeft + c.style.codeIndent + 4f
+        val y = c.style.paddingTop + c.style.codeMargin + c.style.codePaddingTop / 2f
+        c.onMouse(PointerAction.DOWN, x, y, 1, false, 0)
+        c.onMouse(PointerAction.UP, x, y, 1, false, 0)
+        assertEquals(listOf(0 to CodeLanguage.C), host.languageMenus)
+        c.setBlockLanguage(0, CodeLanguage.CPP, 0)
+        assertEquals(listOf(CodeLanguage.CPP, CodeLanguage.CPP), (0..1).map { c.style(it).language })
+    }
+
+    @Test
+    fun clickingBesideTheLanguageNamePlacesTheCaretAsUsual() {
+        val host = RecordingHost()
+        val c = Composer(TestFonts.family, EditorStyle.macLike(2f), host)
+        c.setViewport(1200, 2000, 0f, 0f)
+        c.type("int a;", 0)
+        c.toggleCodeBlock(CodeLanguage.C, 0)
+        val y = c.style.paddingTop + c.style.codeMargin + c.style.codePaddingTop / 2f
+        c.onMouse(PointerAction.DOWN, 900f, y, 1, false, 0)
+        c.onMouse(PointerAction.UP, 900f, y, 1, false, 0)
+        assertTrue(host.languageMenus.isEmpty())
     }
 
     @Test

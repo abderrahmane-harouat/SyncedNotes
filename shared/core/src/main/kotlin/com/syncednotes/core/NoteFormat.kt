@@ -1,6 +1,7 @@
 package com.syncednotes.core
 
 import com.syncednotes.engine.text.Alignment
+import com.syncednotes.engine.text.CalloutColor
 import com.syncednotes.engine.text.CharStyle
 import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.Direction
@@ -13,6 +14,7 @@ import com.syncednotes.engine.text.ValueStyle
 import com.syncednotes.engine.text.relativeSize
 import com.syncednotes.engine.text.sizeValue
 import kotlin.math.roundToInt
+import syncednotes.note.v1.CalloutColor as StoredCalloutColor
 import syncednotes.note.v1.CodeLanguage as StoredCodeLanguage
 import syncednotes.note.v1.Color
 import syncednotes.note.v1.Divider
@@ -97,6 +99,7 @@ class NoteFormat {
                 StoredRole.ROLE_CODE_BLOCK -> Role.CODE_BLOCK
                 StoredRole.ROLE_CHECKLIST -> Role.CHECKLIST
                 StoredRole.ROLE_DIVIDER -> Role.DIVIDER
+                StoredRole.ROLE_CALLOUT -> Role.CALLOUT
                 else -> Role.BODY
             },
             lists = stored.listsList.map { level ->
@@ -132,6 +135,19 @@ class NoteFormat {
                 }
                 else -> CodeLanguage.NONE
             },
+            // A colour this app does not know yet reads as blue, and leaving it out is what
+            // makes [canEdit] refuse the note rather than save over it.
+            callout = when (stored.role) {
+                StoredRole.ROLE_CALLOUT -> when (stored.callout) {
+                    StoredCalloutColor.CALLOUT_COLOR_GREEN -> CalloutColor.GREEN
+                    StoredCalloutColor.CALLOUT_COLOR_ORANGE -> CalloutColor.ORANGE
+                    StoredCalloutColor.CALLOUT_COLOR_PURPLE -> CalloutColor.PURPLE
+                    StoredCalloutColor.CALLOUT_COLOR_PINK -> CalloutColor.PINK
+                    StoredCalloutColor.CALLOUT_COLOR_GRAY -> CalloutColor.GRAY
+                    else -> CalloutColor.BLUE
+                }
+                else -> CalloutColor.BLUE
+            },
         )
 
     private fun paragraph(document: TextDocument, p: Int): Paragraph {
@@ -151,6 +167,7 @@ class NoteFormat {
                     Role.CODE_BLOCK -> StoredRole.ROLE_CODE_BLOCK
                     Role.CHECKLIST -> StoredRole.ROLE_CHECKLIST
                     Role.DIVIDER -> StoredRole.ROLE_DIVIDER
+                    Role.CALLOUT -> StoredRole.ROLE_CALLOUT
                 },
             )
             .setChecked(style.role == Role.CHECKLIST && style.checked)
@@ -159,6 +176,16 @@ class NoteFormat {
                     CodeLanguage.NONE -> StoredCodeLanguage.CODE_LANGUAGE_NONE
                     CodeLanguage.C -> StoredCodeLanguage.CODE_LANGUAGE_C
                     CodeLanguage.CPP -> StoredCodeLanguage.CODE_LANGUAGE_CPP
+                },
+            )
+            .setCallout(
+                when (if (style.role == Role.CALLOUT) style.callout else CalloutColor.BLUE) {
+                    CalloutColor.BLUE -> StoredCalloutColor.CALLOUT_COLOR_BLUE
+                    CalloutColor.GREEN -> StoredCalloutColor.CALLOUT_COLOR_GREEN
+                    CalloutColor.ORANGE -> StoredCalloutColor.CALLOUT_COLOR_ORANGE
+                    CalloutColor.PURPLE -> StoredCalloutColor.CALLOUT_COLOR_PURPLE
+                    CalloutColor.PINK -> StoredCalloutColor.CALLOUT_COLOR_PINK
+                    CalloutColor.GRAY -> StoredCalloutColor.CALLOUT_COLOR_GRAY
                 },
             )
             .setAlignment(

@@ -22,6 +22,7 @@ import androidx.compose.ui.window.application
 import androidx.compose.ui.window.rememberWindowState
 import com.syncednotes.core.sync.SyncService
 import com.syncednotes.engine.text.Alignment
+import com.syncednotes.engine.text.CalloutColor
 import com.syncednotes.engine.text.CharStyle
 import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.ListType
@@ -279,6 +280,12 @@ private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor, layout: Wi
             Menu("Code Block", enabled = editing) {
                 for (language in CodeLanguage.entries) {
                     CheckboxItem(language.title, checked = state?.codeLanguage == language, enabled = editing, onCheckedChange = { act { c.toggleCodeBlock(language, now()) }() })
+                }
+            }
+            // A callout of the colour chosen; choosing the one it is already puts it back to body text.
+            Menu("Callout", enabled = editing) {
+                for (color in CalloutColor.entries) {
+                    CheckboxItem(color.title, checked = state?.calloutColor == color, enabled = editing, onCheckedChange = { act { c.toggleCallout(color, now()) }() })
                 }
             }
             Item("Insert Divider", shortcut = KeyShortcut(Key.D, meta = true, shift = true), enabled = editing, onClick = act { c.insertDivider(now()) })

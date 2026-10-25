@@ -28,6 +28,7 @@
     <string name="align_justify">Justify</string>
     <string name="quote">Block quote</string>
     <string name="code_block">Code block</string>
+    <string name="callout">Callout</string>
     <string name="inline_code">Inline code</string>
     <string name="divider">Insert divider</string>
     <string name="line_spacing">Line spacing</string>

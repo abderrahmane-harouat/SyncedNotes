@@ -46,6 +46,13 @@ class DocumentLayout(
     private val pictureScale: Float = 1f,
     /** A picture's own size in points, by handle; null when unknown. */
     var pictureSize: (Int) -> Pair<Int, Int>? = { null },
+    /** Room at the top of a code block, where its language is named, and at its foot. */
+    private val codeTop: Float = 0f,
+    private val codeBottom: Float = 0f,
+    /** A callout's text's room from its panel's sides, and above and below, outside margin included. */
+    private val calloutIndent: Float = 0f,
+    private val calloutTop: Float = 0f,
+    private val calloutBottom: Float = 0f,
 ) {
     private val shapers = HashMap<FontStack, Shaper>()
     private val markerRuns = HashMap<Pair<String, Float>, ShapedRun>()
@@ -76,7 +83,9 @@ class DocumentLayout(
         relex(0, exits.size - 1)
         document.addListener(::onChange)
         document.addFormatListener { first, last ->
-            for (i in first..minOf(last, paragraphs.size - 1)) paragraphs[i] = null
+            // The lines either side too: one that becomes code, or stops being code, moves
+            // where a code block begins or ends, and so where its padding goes.
+            for (i in maxOf(0, first - 1)..minOf(last + 1, paragraphs.size - 1)) paragraphs[i] = null
             relex(first, minOf(last, exits.size - 1))
             topsValid = false
         }
@@ -90,17 +99,28 @@ class DocumentLayout(
         val roleIndent = when (style.role) {
             Role.QUOTE -> quoteIndent
             Role.CODE_BLOCK -> codeIndent
+            Role.CALLOUT -> calloutIndent
             // The circle's room, as a list item has its marker's.
             Role.CHECKLIST -> listMarkerWidth
             else -> 0f
         }
         val left = roleIndent + style.depth * listMarkerWidth + style.indent * indentWidth
-        return left to if (style.role == Role.CODE_BLOCK) codeIndent else 0f
+        return left to when (style.role) {
+            Role.CODE_BLOCK -> codeIndent
+            Role.CALLOUT -> calloutIndent
+            else -> 0f
+        }
     }
 
     private fun onChange(change: TextChange) {
         repeat(change.paragraphsBefore) { paragraphs.removeAt(change.firstParagraph) }
         repeat(change.paragraphsAfter) { paragraphs.add(change.firstParagraph, null) }
+        // Lines that came or went may have moved where a code block begins or ends.
+        if (change.paragraphsBefore != change.paragraphsAfter) {
+            if (change.firstParagraph > 0) paragraphs[change.firstParagraph - 1] = null
+            val after = change.firstParagraph + change.paragraphsAfter
+            if (after < paragraphs.size) paragraphs[after] = null
+        }
         // The new lines start out with what the replaced ones left open for the line below,
         // which is what that line was coloured from.
         val leftOpen = exits[change.firstParagraph + change.paragraphsBefore - 1]
@@ -176,13 +196,50 @@ class DocumentLayout(
             paragraphs[index] = layout
             return layout
         }
+        val (above, below) = panelPadding(index, style)
         val layout = ParagraphLayout(
             text, concatenate(parts), runs, width, ascentPerPx, descentPerPx, spacing, textLeft, style.alignment, textRight,
-            levels, baseLevel,
+            levels, baseLevel, spaceAbove = above, spaceBelow = below,
         )
         paragraphs[index] = layout
         return layout
     }
+
+    /**
+     * The first line of a code block or a callout has the room at the top of its panel, its last
+     * the room at its foot; the lines between have none, so the panel's text runs on as text.
+     */
+    private fun panelPadding(index: Int, style: ParagraphStyle): Pair<Float, Float> {
+        val (top, bottom) = when (style.role) {
+            Role.CODE_BLOCK -> codeTop to codeBottom
+            Role.CALLOUT -> calloutTop to calloutBottom
+            else -> return 0f to 0f
+        }
+        return (if (isPanelStart(index)) top else 0f) to (if (isPanelEnd(index)) bottom else 0f)
+    }
+
+    /**
+     * Whether paragraphs [a] and [b] are drawn on one panel: both code, or both callouts of the
+     * same colour. A callout of another colour right after one is a panel of its own.
+     */
+    fun samePanel(a: Int, b: Int): Boolean {
+        if (a !in 0 until document.paragraphCount || b !in 0 until document.paragraphCount) return false
+        val x = document.paragraphStyle(a)
+        val y = document.paragraphStyle(b)
+        return when (x.role) {
+            Role.CODE_BLOCK -> y.role == Role.CODE_BLOCK
+            Role.CALLOUT -> y.role == Role.CALLOUT && y.callout == x.callout
+            else -> false
+        }
+    }
+
+    fun isPanelStart(index: Int): Boolean = !samePanel(index - 1, index)
+
+    fun isPanelEnd(index: Int): Boolean = !samePanel(index, index + 1)
+
+    /** Whether paragraph [index] is the first of a code block. */
+    fun isBlockStart(index: Int): Boolean =
+        document.paragraphStyle(index).role == Role.CODE_BLOCK && (index == 0 || document.paragraphStyle(index - 1).role != Role.CODE_BLOCK)
 
     /** The paragraph's code coloured by its language; null for one that is not code with a language. */
     private fun highlight(index: Int, text: String, style: ParagraphStyle): List<Token>? =

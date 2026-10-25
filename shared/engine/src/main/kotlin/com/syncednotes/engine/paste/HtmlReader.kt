@@ -1,5 +1,6 @@
 package com.syncednotes.engine.paste
 
+import com.syncednotes.engine.text.CalloutColor
 import com.syncednotes.engine.text.CharStyle
 import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.ListKind
@@ -227,6 +228,8 @@ object HtmlReader {
         val item: Item? = null,
         /** In a table's cell, which is part of its row's one line. */
         val inCell: Boolean = false,
+        /** Inside a box the page gave a colour: a callout of the nearest colour. */
+        val callout: CalloutColor? = null,
     )
 
     /**
@@ -245,8 +248,21 @@ object HtmlReader {
 
         /** The style a paragraph begun here takes. */
         private fun paragraphStyle(ctx: Context): ParagraphStyle {
-            val item = ctx.item ?: return ctx.paragraph
-            return if (out.count > item.firstAt) ParagraphStyle(indent = item.style.lists.size) else item.style
+            val item = ctx.item ?: return inCallout(ctx.paragraph, ctx)
+            return inCallout(if (out.count > item.firstAt) ParagraphStyle(indent = item.style.lists.size) else item.style, ctx)
+        }
+
+        /**
+         * Text in a coloured box is a callout's, whatever else it is: a heading in one is a bold
+         * line of it, a list in one keeps its list. Code, a divider and a checklist stay what
+         * they are, as a callout cannot also be one.
+         */
+        private fun inCallout(style: ParagraphStyle, ctx: Context): ParagraphStyle {
+            val color = ctx.callout ?: return style
+            return when (style.role) {
+                Role.CODE_BLOCK, Role.DIVIDER, Role.CHECKLIST -> style
+                else -> style.copy(role = Role.CALLOUT, callout = color)
+            }
         }
 
         private fun separate(ctx: Context) {
@@ -277,6 +293,17 @@ object HtmlReader {
 
         private fun node(e: Element, outer: Context) {
             if (e.name in SKIPPED) return
+            val boxed = calloutColor(e)?.takeIf { it != outer.callout && e.name in BOXES && !outer.inCell }
+            if (boxed != null) {
+                // A coloured box: set apart from what is around it, as a callout of its own.
+                if (outer.topLevel) separate(outer)
+                val inside = outer.copy(callout = boxed, topLevel = false, item = null, paragraph = ParagraphStyle(role = Role.CALLOUT, callout = boxed))
+                out.startParagraph(paragraphStyle(inside))
+                node(e, inside)
+                out.startParagraph(paragraphStyle(outer))
+                afterHeading = false
+                return
+            }
             val ctx = styled(e, outer)
             // Whatever a cell holds is part of its row's line.
             if (ctx.inCell) {
@@ -301,7 +328,9 @@ object HtmlReader {
                         "h2" -> Role.HEADING
                         else -> Role.SUBHEADING
                     }
-                    block(e, ctx, ctx.copy(paragraph = ParagraphStyle(role = role), boldByRole = true, item = null, styles = ctx.styles - CharStyle.BOLD))
+                    // In a callout, a heading is the callout's line in bold: it cannot be both.
+                    if (ctx.callout != null) block(e, ctx, ctx.copy(paragraph = ParagraphStyle(role = role), item = null, styles = ctx.styles + CharStyle.BOLD))
+                    else block(e, ctx, ctx.copy(paragraph = ParagraphStyle(role = role), boldByRole = true, item = null, styles = ctx.styles - CharStyle.BOLD))
                     afterHeading = true
                 }
                 "p" -> {
@@ -331,8 +360,9 @@ object HtmlReader {
                         ctx.lists.isEmpty() -> ParagraphStyle(lists = listOf(ListLevel(ListKind.BULLET, ++listIds)))
                         else -> ParagraphStyle(lists = ctx.lists)
                     }
-                    out.startParagraph(style)
-                    children(e, ctx.copy(topLevel = false, item = Item(style, out.count)))
+                    val shown = inCallout(style, ctx)
+                    out.startParagraph(shown)
+                    children(e, ctx.copy(topLevel = false, item = Item(shown, out.count)))
                     out.startParagraph(paragraphStyle(outer))
                 }
                 "table" -> {
@@ -484,4 +514,82 @@ object HtmlReader {
     }
 
     private val WHITESPACE = Regex("[ \\t\\n\\r\\f]+")
+
+    /** The elements a page draws a coloured box with. */
+    private val BOXES = setOf("div", "section", "aside", "figure", "blockquote", "article", "details", "p")
+
+    /**
+     * The callout colour an element's box has: by a class that says it is a callout or names a
+     * background colour (Notion's `block-color-blue_background`), or by a background colour
+     * in its inline style, as browsers write what was copied. Grey, white and black boxes are
+     * not callouts, so a page's own background never becomes one.
+     */
+    internal fun calloutColor(e: Element): CalloutColor? {
+        val classes = e.attributes["class"].orEmpty().lowercase().split(' ', '\t').filter { it.isNotEmpty() }
+        for (c in classes) {
+            if (!c.endsWith("_background") && !c.endsWith("-background")) continue
+            NAMED_BACKGROUNDS.entries.firstOrNull { (name, _) -> name in c }?.let { return it.value }
+        }
+        val css = e.attributes["style"].orEmpty().lowercase()
+        val background = Regex("background(-color)?\\s*:\\s*([^;]+)").find(css)?.groupValues?.get(2)
+        val color = background?.let { COLOR_VALUE.find(it)?.value }?.let(::rgba)
+        if (color != null) nearest(color)?.let { return it }
+        return if (classes.any { "callout" in it }) CalloutColor.BLUE else null
+    }
+
+    private val NAMED_BACKGROUNDS = linkedMapOf(
+        "blue" to CalloutColor.BLUE, "green" to CalloutColor.GREEN, "orange" to CalloutColor.ORANGE,
+        "yellow" to CalloutColor.ORANGE, "brown" to CalloutColor.ORANGE, "purple" to CalloutColor.PURPLE,
+        "pink" to CalloutColor.PINK, "red" to CalloutColor.PINK, "gray" to CalloutColor.GRAY, "grey" to CalloutColor.GRAY,
+    )
+
+    private val COLOR_VALUE = Regex("#[0-9a-f]{3,8}\\b|rgba?\\([^)]*\\)")
+
+    /** Red, green and blue from 0 to 255, and alpha from 0 to 1, of a CSS colour; null if unread. */
+    private fun rgba(value: String): FloatArray? {
+        if (value.startsWith("#")) {
+            val hex = value.substring(1)
+            val full = when (hex.length) {
+                3, 4 -> hex.map { "$it$it" }.joinToString("")
+                6, 8 -> hex
+                else -> return null
+            }
+            val n = full.chunked(2).map { it.toInt(16).toFloat() }
+            return floatArrayOf(n[0], n[1], n[2], if (n.size == 4) n[3] / 255f else 1f)
+        }
+        val parts = value.substringAfter('(').substringBefore(')').split(',', ' ', '/').filter { it.isNotBlank() }
+        if (parts.size < 3) return null
+        fun channel(s: String) = if (s.endsWith("%")) s.dropLast(1).toFloatOrNull()?.times(2.55f) else s.toFloatOrNull()
+        val r = channel(parts[0]) ?: return null
+        val g = channel(parts[1]) ?: return null
+        val b = channel(parts[2]) ?: return null
+        val a = parts.getOrNull(3)?.let { if (it.endsWith("%")) it.dropLast(1).toFloatOrNull()?.div(100f) else it.toFloatOrNull() } ?: 1f
+        return floatArrayOf(r, g, b, a)
+    }
+
+    /**
+     * The callout colour nearest [rgba] by hue; none for a colour too see-through or too near
+     * grey to be meant as one, judged by how far its channels stand apart rather than by HSL's
+     * saturation, which calls a pale grey with a hint of warmth saturated.
+     */
+    private fun nearest(rgba: FloatArray): CalloutColor? {
+        val (r, g, b, a) = rgba.toList()
+        if (a < 0.08f) return null
+        val max = maxOf(r, g, b)
+        val min = minOf(r, g, b)
+        if ((max - min) * a < 14f) return null
+        val hue = when (max) {
+            r -> 60f * (((g - b) / (max - min)) % 6f)
+            g -> 60f * ((b - r) / (max - min) + 2f)
+            else -> 60f * ((r - g) / (max - min) + 4f)
+        }.let { if (it < 0f) it + 360f else it }
+        return when {
+            hue < 15f -> CalloutColor.PINK
+            hue < 70f -> CalloutColor.ORANGE
+            hue < 170f -> CalloutColor.GREEN
+            hue < 255f -> CalloutColor.BLUE
+            hue < 290f -> CalloutColor.PURPLE
+            else -> CalloutColor.PINK
+        }
+    }
 }

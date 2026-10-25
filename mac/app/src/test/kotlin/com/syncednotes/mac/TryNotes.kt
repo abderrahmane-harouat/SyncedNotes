@@ -5,6 +5,7 @@ import com.syncednotes.core.createVault
 import com.syncednotes.core.newId
 import java.io.File
 import java.time.Instant
+import syncednotes.note.v1.CalloutColor
 import syncednotes.note.v1.CodeLanguage
 import syncednotes.note.v1.Embedded
 import syncednotes.note.v1.Divider
@@ -112,6 +113,21 @@ fun main() {
             work,
         )
         save(note(p("Weekend plan 🌿", Role.ROLE_TITLE), p("Things to get done before Monday 😀 👍🏽 🇩🇿 👨‍👩‍👧 ❤️, in no particular order."), check("Water the plants", true), check("Call the bakery"), check("Fix the bike's back light")))
+        // Saved last, so it is the newest and the one open at launch.
+        save(
+            note(
+                p("Where values live", Role.ROLE_TITLE),
+                p("A process's virtual address space on macOS typically contains regions like these:"),
+                callout(CalloutColor.CALLOUT_COLOR_BLUE, p("Stack").addRuns(run(0, 5).setBold(true).setRelativeSize(1.125f))),
+                callout(CalloutColor.CALLOUT_COLOR_BLUE, p("x = 20 — typically stored here because x is a local variable.").addRuns(run(0, 6).setCode(true)).addRuns(run(39, 1).setCode(true))),
+                callout(CalloutColor.CALLOUT_COLOR_BLUE, p("Its lifetime is associated with the function call.").addRuns(run(0, 50).setRelativeSize(0.875f).setColor(GRAY))),
+                callout(CalloutColor.CALLOUT_COLOR_GREEN, p("Heap").addRuns(run(0, 4).setBold(true).setRelativeSize(1.125f))),
+                callout(CalloutColor.CALLOUT_COLOR_GREEN, p("*p = 30 — the allocated memory contains the integer value 30.").addRuns(run(0, 7).setCode(true)).addRuns(run(58, 2).setCode(true))),
+                callout(CalloutColor.CALLOUT_COLOR_ORANGE, p("Global/static data region").addRuns(run(0, 25).setBold(true).setRelativeSize(1.125f))),
+                callout(CalloutColor.CALLOUT_COLOR_ORANGE, p("global = 10 — typically stored in a data segment.").addRuns(run(0, 11).setCode(true))),
+            ),
+            work,
+        )
         val old = newId()
         store.save(note(p("Old shopping list", Role.ROLE_TITLE), p("milk, bread")), old, now = t.minusSeconds(90_000))
         store.moveToTrash(old)
@@ -123,5 +139,10 @@ private fun note(vararg paragraphs: Paragraph.Builder): Note = Note.newBuilder()
 private fun p(text: String, role: Role = Role.ROLE_BODY) = Paragraph.newBuilder().setText(text).setRole(role)
 private fun check(text: String, checked: Boolean = false) = p(text, Role.ROLE_CHECKLIST).setChecked(checked)
 private fun list(text: String, kind: ListKind, id: Int) = p(text).addLists(ListLevel.newBuilder().setKind(kind).setList(id))
+private fun callout(color: CalloutColor, paragraph: Paragraph.Builder) = paragraph.setRole(Role.ROLE_CALLOUT).setCallout(color)
+
+/** The toolbar's Gray, with the very floats the app saves for it. */
+private val GRAY = syncednotes.note.v1.Color.newBuilder().setRed(0.56f).setGreen(0.56f).setBlue(0.60f).setAlpha(1f).build()
+
 private fun code(language: CodeLanguage, vararg lines: String) = lines.map { p(it, Role.ROLE_CODE_BLOCK).setLanguage(language) }.toTypedArray()
 private fun run(start: Int, length: Int) = Run.newBuilder().setStart(start).setLength(length)

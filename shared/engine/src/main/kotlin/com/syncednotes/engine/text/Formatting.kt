@@ -21,7 +21,7 @@ enum class Direction { NATURAL, LEFT_TO_RIGHT, RIGHT_TO_LEFT }
  * What a paragraph is, as the note format (note.proto) records it: meaning, never looks. A
  * title is drawn large and bold because it is a title; nothing about its font is stored.
  */
-enum class Role { BODY, TITLE, HEADING, SUBHEADING, QUOTE, CODE_BLOCK, CHECKLIST, DIVIDER }
+enum class Role { BODY, TITLE, HEADING, SUBHEADING, QUOTE, CODE_BLOCK, CHECKLIST, DIVIDER, CALLOUT }
 
 enum class ListKind { BULLET, DASH, NUMBER }
 
@@ -30,6 +30,12 @@ enum class ListKind { BULLET, DASH, NUMBER }
  * shown as it is, monospaced in the text colour.
  */
 enum class CodeLanguage(val title: String) { NONE("Plain"), C("C"), CPP("C++") }
+
+/**
+ * The colour of a callout's panel, by name: each is drawn in a shade that reads on the light
+ * look and another for the dark, as the note format records the name, never the colour.
+ */
+enum class CalloutColor(val title: String) { BLUE("Blue"), GREEN("Green"), ORANGE("Orange"), PURPLE("Purple"), PINK("Pink"), GRAY("Gray") }
 
 /**
  * One list a paragraph is an item of. Paragraphs next to each other with the same [id] at a
@@ -61,6 +67,8 @@ data class ParagraphStyle(
     val picture: Int = 0,
     /** Only meaningful for a code block; every paragraph of one block has the same. */
     val language: CodeLanguage = CodeLanguage.NONE,
+    /** Only meaningful for a callout; paragraphs next to each other with the same are one callout. */
+    val callout: CalloutColor = CalloutColor.BLUE,
 ) {
     /** A paragraph that is one thing rather than text: a divider or a picture. */
     val isObject: Boolean get() = role == Role.DIVIDER || picture != 0

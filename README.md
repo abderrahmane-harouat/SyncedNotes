@@ -41,6 +41,10 @@ until the new one does everything it did. Not independently reviewed. What comes
 - **Paste keeps the formatting** of what was copied from a web page (Claude, ChatGPT), from
   Notion, or as Markdown from a Copy button: headings, lists, checklists, quotes, code in its
   language, bold and the rest. ⌥⇧⌘V on the Mac, Ctrl+Shift+V on the phone, paste plain text.
+- **Callouts.** Set lines apart on a coloured panel, blue, green, orange, purple, pink or gray,
+  from the toolbar's callout button on the Mac or the swatches in the phone's Text options;
+  inline code sits on a chip of its own. Coloured boxes pasted from a web page or Notion come in
+  as callouts, and Markdown's `> [!NOTE]` alerts too.
 - **The same tools on the Mac and the phone.** The phone's toolbar is Samsung Notes': checklist,
   a Text options card with every paragraph and character style, font colour, highlight, size,
   undo and redo, plus a picture button and reading mode. The Mac has the same in its toolbar,

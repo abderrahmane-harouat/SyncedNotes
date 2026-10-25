@@ -167,4 +167,25 @@ public interface ParagraphOrBuilder extends
    * @return The language.
    */
   syncednotes.note.v1.CodeLanguage getLanguage();
+
+  /**
+   * <pre>
+   * Only for a callout: which of the callout colours its panel is. Named, never RGB, so it is
+   * drawn in the shade that reads on the light look or the dark one.
+   * </pre>
+   *
+   * <code>.syncednotes.note.v1.CalloutColor callout = 11;</code>
+   * @return The enum numeric value on the wire for callout.
+   */
+  int getCalloutValue();
+  /**
+   * <pre>
+   * Only for a callout: which of the callout colours its panel is. Named, never RGB, so it is
+   * drawn in the shade that reads on the light look or the dark one.
+   * </pre>
+   *
+   * <code>.syncednotes.note.v1.CalloutColor callout = 11;</code>
+   * @return The callout.
+   */
+  syncednotes.note.v1.CalloutColor getCallout();
 }

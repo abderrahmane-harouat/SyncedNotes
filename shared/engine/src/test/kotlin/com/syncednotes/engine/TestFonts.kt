@@ -42,6 +42,11 @@ class RecordingHost : ComposerHost {
     override fun textChangedOutsideInput() { restarts++ }
     var formatChanges = 0
     override fun formatChanged() { formatChanges++ }
+    /** Each time the languages were asked for: the block's first paragraph and its language. */
+    val languageMenus = ArrayList<Pair<Int, com.syncednotes.engine.text.CodeLanguage>>()
+    override fun chooseCodeLanguage(paragraph: Int, current: com.syncednotes.engine.text.CodeLanguage, x: Float, y: Float) {
+        languageMenus += paragraph to current
+    }
 }
 
 /** A phone-sized editor at density 2.625 (420 dpi), the emulator's. */

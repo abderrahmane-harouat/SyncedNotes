@@ -97,7 +97,9 @@ Trash and pictures. Tried between this Mac's try-out notes and a Galaxy M32.
   Mac's toolbar.
 - [x] Code blocks in a language, their syntax coloured: C and C++ (Format ▸ Code Block on the
   Mac, the code block button on the phone).
-- [ ] More languages for code blocks, and the block's language shown on the block itself.
+- [x] The block's language shown on the block, and changed from there.
+- [ ] More languages for code blocks.
+- [x] Callouts in six colours, on both; pasted from web pages, Notion and Markdown alerts.
 - [ ] Sync in the background on the phone, while the app is closed: today it syncs while open
   and unlocked, as SyncedPass does.
 - [ ] Deletion marks kept forever: prune those both devices have seen.

@@ -56,7 +56,17 @@ class Editor(scale: Float, dark: Boolean) : ComposerHost {
     override fun selectionChanged(selectionStart: Int, selectionEnd: Int, composingStart: Int, composingEnd: Int) {}
     override fun textChangedOutsideInput() {}
     override fun formatChanged() { format = composer.formatState() }
+
+    /** The languages a code block may be in, shown where its name was clicked; null while closed. */
+    var languageMenu: LanguageMenu? by mutableStateOf(null)
+
+    override fun chooseCodeLanguage(paragraph: Int, current: com.syncednotes.engine.text.CodeLanguage, x: Float, y: Float) {
+        languageMenu = LanguageMenu(paragraph, current, x, y)
+    }
 }
+
+/** The block starting at [paragraph], in [current], whose name is at ([x], [y]) in the canvas's pixels. */
+data class LanguageMenu(val paragraph: Int, val current: com.syncednotes.engine.text.CodeLanguage, val x: Float, val y: Float)
 
 /**
  * The note, drawn by the engine: like the phone's NoteCanvasView, this owns no text logic. It

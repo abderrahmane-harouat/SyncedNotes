@@ -38,6 +38,12 @@ class ParagraphLayout(
      * spread above and below; the picture's width is its one glyph's advance.
      */
     val objectHeight: Float = 0f,
+    /**
+     * Room above the first line and below the last, inside the paragraph: a code block's
+     * padding, so its text keeps clear of its panel's edges, with the language's name above.
+     */
+    val spaceAbove: Float = 0f,
+    val spaceBelow: Float = 0f,
 ) {
     /** Where the picture's top is in its line. */
     val objectTop: Float
@@ -101,7 +107,7 @@ class ParagraphLayout(
         lineHeights = FloatArray(lineCount)
         lineBaselines = FloatArray(lineCount)
         lineSizes = FloatArray(lineCount)
-        var y = 0f
+        var y = spaceAbove
         for (line in 0 until lineCount) {
             val ls = lineStarts[line]
             val le = if (line + 1 < lineCount) lineStarts[line + 1] else text.length
@@ -128,7 +134,7 @@ class ParagraphLayout(
             lineSizes[line] = size
             y += h
         }
-        height = y
+        height = y + spaceBelow
         objectTop = if (objectHeight > 0f) lineSizes.firstOrNull()?.let { it * 0.25f } ?: 0f else 0f
     }
 

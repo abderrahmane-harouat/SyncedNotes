@@ -678,6 +678,74 @@ public  final class Paragraph extends
     language_ = 0;
   }
 
+  public static final int CALLOUT_FIELD_NUMBER = 11;
+  private int callout_;
+  /**
+   * <pre>
+   * Only for a callout: which of the callout colours its panel is. Named, never RGB, so it is
+   * drawn in the shade that reads on the light look or the dark one.
+   * </pre>
+   *
+   * <code>.syncednotes.note.v1.CalloutColor callout = 11;</code>
+   * @return The enum numeric value on the wire for callout.
+   */
+  @java.lang.Override
+  public int getCalloutValue() {
+    return callout_;
+  }
+  /**
+   * <pre>
+   * Only for a callout: which of the callout colours its panel is. Named, never RGB, so it is
+   * drawn in the shade that reads on the light look or the dark one.
+   * </pre>
+   *
+   * <code>.syncednotes.note.v1.CalloutColor callout = 11;</code>
+   * @return The callout.
+   */
+  @java.lang.Override
+  public syncednotes.note.v1.CalloutColor getCallout() {
+    syncednotes.note.v1.CalloutColor result = syncednotes.note.v1.CalloutColor.forNumber(callout_);
+    return result == null ? syncednotes.note.v1.CalloutColor.UNRECOGNIZED : result;
+  }
+  /**
+   * <pre>
+   * Only for a callout: which of the callout colours its panel is. Named, never RGB, so it is
+   * drawn in the shade that reads on the light look or the dark one.
+   * </pre>
+   *
+   * <code>.syncednotes.note.v1.CalloutColor callout = 11;</code>
+   * @param value The enum numeric value on the wire for callout to set.
+   */
+  private void setCalloutValue(int value) {
+      callout_ = value;
+  }
+  /**
+   * <pre>
+   * Only for a callout: which of the callout colours its panel is. Named, never RGB, so it is
+   * drawn in the shade that reads on the light look or the dark one.
+   * </pre>
+   *
+   * <code>.syncednotes.note.v1.CalloutColor callout = 11;</code>
+   * @param value The callout to set.
+   * @throws IllegalArgumentException if UNRECOGNIZED is provided.
+   */
+  private void setCallout(syncednotes.note.v1.CalloutColor value) {
+    callout_ = value.getNumber();
+
+  }
+  /**
+   * <pre>
+   * Only for a callout: which of the callout colours its panel is. Named, never RGB, so it is
+   * drawn in the shade that reads on the light look or the dark one.
+   * </pre>
+   *
+   * <code>.syncednotes.note.v1.CalloutColor callout = 11;</code>
+   */
+  private void clearCallout() {
+
+    callout_ = 0;
+  }
+
   public static syncednotes.note.v1.Paragraph parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -1482,6 +1550,78 @@ public  final class Paragraph extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Only for a callout: which of the callout colours its panel is. Named, never RGB, so it is
+     * drawn in the shade that reads on the light look or the dark one.
+     * </pre>
+     *
+     * <code>.syncednotes.note.v1.CalloutColor callout = 11;</code>
+     * @return The enum numeric value on the wire for callout.
+     */
+    @java.lang.Override
+    public int getCalloutValue() {
+      return instance.getCalloutValue();
+    }
+    /**
+     * <pre>
+     * Only for a callout: which of the callout colours its panel is. Named, never RGB, so it is
+     * drawn in the shade that reads on the light look or the dark one.
+     * </pre>
+     *
+     * <code>.syncednotes.note.v1.CalloutColor callout = 11;</code>
+     * @param value The callout to set.
+     * @throws IllegalArgumentException if UNRECOGNIZED is provided.
+     * @return This builder for chaining.
+     */
+    public Builder setCalloutValue(int value) {
+      copyOnWrite();
+      instance.setCalloutValue(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Only for a callout: which of the callout colours its panel is. Named, never RGB, so it is
+     * drawn in the shade that reads on the light look or the dark one.
+     * </pre>
+     *
+     * <code>.syncednotes.note.v1.CalloutColor callout = 11;</code>
+     * @return The callout.
+     */
+    @java.lang.Override
+    public syncednotes.note.v1.CalloutColor getCallout() {
+      return instance.getCallout();
+    }
+    /**
+     * <pre>
+     * Only for a callout: which of the callout colours its panel is. Named, never RGB, so it is
+     * drawn in the shade that reads on the light look or the dark one.
+     * </pre>
+     *
+     * <code>.syncednotes.note.v1.CalloutColor callout = 11;</code>
+     * @param value The enum numeric value on the wire for callout to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCallout(syncednotes.note.v1.CalloutColor value) {
+      copyOnWrite();
+      instance.setCallout(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Only for a callout: which of the callout colours its panel is. Named, never RGB, so it is
+     * drawn in the shade that reads on the light look or the dark one.
+     * </pre>
+     *
+     * <code>.syncednotes.note.v1.CalloutColor callout = 11;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCallout() {
+      copyOnWrite();
+      instance.clearCallout();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:syncednotes.note.v1.Paragraph)
   }
   @java.lang.Override
@@ -1510,10 +1650,11 @@ public  final class Paragraph extends
             "indent_",
             "lineSpacing_",
             "language_",
+            "callout_",
           };
           java.lang.String info =
-              "\u0000\n\u0000\u0000\u0001\n\n\u0000\u0002\u0000\u0001\u0208\u0002\u001b\u0003\f" +
-              "\u0004\u0007\u0005\u001b\u0006\f\u0007\f\b\u000b\t\u0001\n\f";
+              "\u0000\u000b\u0000\u0000\u0001\u000b\u000b\u0000\u0002\u0000\u0001\u0208\u0002\u001b" +
+              "\u0003\f\u0004\u0007\u0005\u001b\u0006\f\u0007\f\b\u000b\t\u0001\n\f\u000b\f";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

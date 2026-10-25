@@ -346,7 +346,15 @@ fun Sheet(width: androidx.compose.ui.unit.Dp = 400.dp, content: @Composable () -
 }
 
 /** One line of a [MenuPopup]: an action, or a separator when [title] is null. */
-class MenuItem(val title: String?, val enabled: Boolean = true, val checked: Boolean = false, val destructive: Boolean = false, val action: () -> Unit = {}) {
+class MenuItem(
+    val title: String?,
+    val enabled: Boolean = true,
+    val checked: Boolean = false,
+    val destructive: Boolean = false,
+    /** A colour shown before the title, for a choice that is a colour: a callout's, say. */
+    val swatch: Color? = null,
+    val action: () -> Unit = {},
+) {
     companion object {
         val SEPARATOR = MenuItem(null)
     }
@@ -397,6 +405,12 @@ fun MenuPopup(expanded: Boolean, onDismiss: () -> Unit, items: List<MenuItem>, o
                 ) {
                     Box(Modifier.width(16.dp)) {
                         if (item.checked) BasicText("✓", style = MacType.body.copy(color = if (lit) Color.White else c.text))
+                    }
+                    item.swatch?.let { swatch ->
+                        Box(
+                            Modifier.padding(end = 7.dp).size(13.dp).clip(RoundedCornerShape(3.5.dp)).background(swatch)
+                                .border(0.5.dp, if (lit) Color.White.copy(alpha = 0.7f) else c.separator, RoundedCornerShape(3.5.dp)),
+                        )
                     }
                     BasicText(
                         item.title,

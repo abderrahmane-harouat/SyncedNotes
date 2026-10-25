@@ -107,6 +107,26 @@ fn is_emoji_joiner(cp: u32) -> bool {
     matches!(cp, 0x200D | 0xFE0E | 0xFE0F | 0x20E3 | 0x1F3FB..=0x1F3FF | 0xE0020..=0xE007F)
 }
 
+/// Unicode's Emoji_Presentation (emoji-data.txt, 18.0): what is drawn as a colour emoji even
+/// without the emoji selector. The symbol fonts have some of these (⭐, ⬛) in black and
+/// white; the rest of what they share with the emoji font (arrows, ☀, ✔) is text by default.
+fn is_emoji_presentation(cp: u32) -> bool {
+    matches!(cp,
+        0x231A..=0x231B | 0x23E9..=0x23EC | 0x23F0 | 0x23F3 | 0x25FD..=0x25FE | 0x2614..=0x2615
+        | 0x2648..=0x2653 | 0x267F | 0x2693 | 0x26A1 | 0x26AA..=0x26AB | 0x26BD..=0x26BE | 0x26C4..=0x26C5
+        | 0x26CE | 0x26D4 | 0x26EA | 0x26F2..=0x26F3 | 0x26F5 | 0x26FA | 0x26FD | 0x2705 | 0x270A..=0x270B
+        | 0x2728 | 0x274C | 0x274E | 0x2753..=0x2755 | 0x2757 | 0x2795..=0x2797 | 0x27B0 | 0x27BF
+        | 0x2B1B..=0x2B1C | 0x2B50 | 0x2B55 | 0x1F004 | 0x1F0CF | 0x1F18E | 0x1F191..=0x1F19A
+        | 0x1F1E6..=0x1F1FF | 0x1F201 | 0x1F21A | 0x1F22F | 0x1F232..=0x1F236 | 0x1F238..=0x1F23A
+        | 0x1F250..=0x1F251 | 0x1F300..=0x1F320 | 0x1F32D..=0x1F335 | 0x1F337..=0x1F37C | 0x1F37E..=0x1F393
+        | 0x1F3A0..=0x1F3CA | 0x1F3CF..=0x1F3D3 | 0x1F3E0..=0x1F3F0 | 0x1F3F4 | 0x1F3F8..=0x1F43E | 0x1F440
+        | 0x1F442..=0x1F4FC | 0x1F4FF..=0x1F53D | 0x1F54B..=0x1F54E | 0x1F550..=0x1F567 | 0x1F57A
+        | 0x1F595..=0x1F596 | 0x1F5A4 | 0x1F5FB..=0x1F64F | 0x1F680..=0x1F6C5 | 0x1F6CC | 0x1F6D0..=0x1F6D2
+        | 0x1F6D5..=0x1F6D9 | 0x1F6DC..=0x1F6DF | 0x1F6EB..=0x1F6EC | 0x1F6F4..=0x1F6FC | 0x1F7E0..=0x1F7EB
+        | 0x1F7F0 | 0x1F90C..=0x1F93A | 0x1F93C..=0x1F945 | 0x1F947..=0x1F9FF | 0x1FA70..=0x1FA7C
+        | 0x1FA80..=0x1FAC6 | 0x1FAC8 | 0x1FACC..=0x1FADD | 0x1FADF..=0x1FAEB | 0x1FAEF..=0x1FAFA)
+}
+
 /// Which of the four shapes each letter takes, by the rules of Unicode's chapter 9: a letter
 /// joins the one before when that one joins forward, and the next when it joins back;
 /// transparent marks are looked through.
@@ -178,10 +198,14 @@ pub fn shape(fonts: &[&Font], text: &[u16], size: f32, rtl: bool, out: &mut Vec<
     let mut font_of = vec![0usize; cps.len()];
     for (i, &cp) in cps.iter().enumerate() {
         // Followed by the emoji selector (U+FE0F), a character that has a text form too (♥,
-        // a digit before a keycap) is drawn as an emoji when a colour font has it.
-        let wants_emoji = cps.get(i + 1) == Some(&0xFE0F);
+        // a digit before a keycap) is drawn as an emoji when a colour font has it. One that
+        // is an emoji by default (⭐, 👍) is too, though a symbol font ahead of the colour one
+        // has it: only the text selector (U+FE0E) asks for its text form.
+        let selector = cps.get(i + 1).copied();
+        let wants_emoji = selector == Some(0xFE0F) || (is_emoji_presentation(cp) && selector != Some(0xFE0E));
         let emoji = if wants_emoji { fonts.iter().position(|f| f.has_color_bitmaps() && f.glyph_index(cp) != 0) } else { None };
-        let first = emoji.or_else(|| fonts.iter().position(|f| f.glyph_index(cp) != 0)).unwrap_or(0);
+        let text = if selector == Some(0xFE0E) { fonts.iter().position(|f| !f.has_color_bitmaps() && f.glyph_index(cp) != 0) } else { None };
+        let first = emoji.or(text).or_else(|| fonts.iter().position(|f| f.glyph_index(cp) != 0)).unwrap_or(0);
         // A space or comma after an emoji goes back to a text font: the emoji font's space is
         // as wide as an emoji. Only what strings emoji together stays with them.
         let stays = i > 0 && is_common(cp) && fonts[font_of[i - 1]].glyph_index(cp) != 0
@@ -451,6 +475,53 @@ mod tests {
         assert!(image.width > 64 && image.height > 64);
         // A yellow face: somewhere a pixel is clearly more red than blue.
         assert!(image.rgba.chunks(4).any(|p| p[3] == 255 && p[0] > 200 && p[2] < 100));
+    }
+
+    fn symbols() -> (Font, Font) {
+        let load = |name: &str| {
+            let path = format!("{}/../assets/fonts/{name}", env!("CARGO_MANIFEST_DIR"));
+            Font::parse(std::fs::read(path).unwrap()).unwrap()
+        };
+        (load("NotoSansMath-Regular.ttf"), load("NotoSansSymbols2-Regular.ttf"))
+    }
+
+    #[test]
+    fn an_arrow_is_drawn_from_the_symbol_fonts_rather_than_as_an_empty_box() {
+        let (latin, colour) = (roboto(), emoji());
+        let (math, symbols) = symbols();
+        let fonts = [&latin, &math, &symbols, &colour];
+        for (arrow, font) in [("\u{2192}", 1), ("\u{21D2}", 1), ("\u{27F6}", 1), ("\u{279C}", 2)] {
+            let out = glyphs(&fonts, arrow, false);
+            assert_eq!((out[0].font, out[0].glyph != 0), (font, true), "{arrow:?} gave {out:?}");
+        }
+    }
+
+    #[test]
+    fn a_character_that_is_an_emoji_by_default_stays_in_colour_though_a_symbol_font_has_it() {
+        let (latin, colour) = (roboto(), emoji());
+        let (math, symbols) = symbols();
+        for star_or_thumb in ["\u{2B50}", "\u{2705}", "\u{1F44D}"] {
+            let out = glyphs(&[&latin, &math, &symbols, &colour], star_or_thumb, false);
+            assert_eq!(out[0].font, 3, "{star_or_thumb:?} gave {out:?}");
+        }
+    }
+
+    #[test]
+    fn an_arrow_that_is_also_an_emoji_is_text_unless_the_emoji_selector_follows() {
+        let (latin, colour) = (roboto(), emoji());
+        let (math, symbols) = symbols();
+        let fonts = [&latin, &math, &symbols, &colour];
+        assert_eq!(glyphs(&fonts, "\u{2194}", false)[0].font, 1);
+        let asked = glyphs(&fonts, "\u{2194}\u{FE0F}", false);
+        assert_eq!((asked.len(), asked[0].font), (1, 3), "{asked:?}");
+    }
+
+    #[test]
+    fn the_text_selector_draws_an_emoji_by_default_as_text() {
+        let (latin, colour) = (roboto(), emoji());
+        let (math, symbols) = symbols();
+        let out = glyphs(&[&latin, &math, &symbols, &colour], "\u{2B50}\u{FE0E}", false);
+        assert_eq!((out.len(), out[0].font), (1, 1), "{out:?}");
     }
 
     #[test]

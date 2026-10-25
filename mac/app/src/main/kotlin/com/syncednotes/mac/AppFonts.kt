@@ -13,15 +13,19 @@ object AppFonts {
     val family: FontFamily by lazy {
         val arabic = load("NotoNaskhArabic-Regular.ttf")
         val arabicBold = load("NotoNaskhArabic-Bold.ttf")
-        // Last in every stack: only what no other font has (emoji) comes from it.
+        // Arrows and symbols Roboto lacks (→ ⇒ ➜), which would otherwise draw as empty boxes.
+        val math = load("NotoSansMath-Regular.ttf")
+        val symbols = load("NotoSansSymbols2-Regular.ttf")
+        // Last in every stack: what no other font has, and what is an emoji by default (⭐,
+        // 👍) though a symbol font has it too; the shaper picks it for those.
         val emoji = load("NotoColorEmoji.ttf")
         // Naskh has no italic; italic Arabic text uses the upright face.
         FontFamily(
-            regular = FontStack(listOf(load("Roboto-Regular.ttf"), arabic, emoji)),
-            bold = FontStack(listOf(load("Roboto-Bold.ttf"), arabicBold, emoji)),
-            italic = FontStack(listOf(load("Roboto-Italic.ttf"), arabic, emoji)),
-            boldItalic = FontStack(listOf(load("Roboto-BoldItalic.ttf"), arabicBold, emoji)),
-            monospace = FontStack(listOf(load("RobotoMono-Regular.ttf"), arabic, emoji)),
+            regular = FontStack(listOf(load("Roboto-Regular.ttf"), arabic, math, symbols, emoji)),
+            bold = FontStack(listOf(load("Roboto-Bold.ttf"), arabicBold, math, symbols, emoji)),
+            italic = FontStack(listOf(load("Roboto-Italic.ttf"), arabic, math, symbols, emoji)),
+            boldItalic = FontStack(listOf(load("Roboto-BoldItalic.ttf"), arabicBold, math, symbols, emoji)),
+            monospace = FontStack(listOf(load("RobotoMono-Regular.ttf"), arabic, math, symbols, emoji)),
         )
     }
 

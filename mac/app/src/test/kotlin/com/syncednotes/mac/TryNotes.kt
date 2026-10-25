@@ -113,7 +113,6 @@ fun main() {
             work,
         )
         save(note(p("Weekend plan 🌿", Role.ROLE_TITLE), p("Things to get done before Monday 😀 👍🏽 🇩🇿 👨‍👩‍👧 ❤️, in no particular order."), check("Water the plants", true), check("Call the bakery"), check("Fix the bike's back light")))
-        // Saved last, so it is the newest and the one open at launch.
         save(
             note(
                 p("Where values live", Role.ROLE_TITLE),
@@ -127,6 +126,17 @@ fun main() {
                 callout(CalloutColor.CALLOUT_COLOR_ORANGE, p("global = 10 — typically stored in a data segment.").addRuns(run(0, 11).setCode(true))),
             ),
             work,
+        )
+        // Saved last, so it is the newest and the one open at launch: arrows come from the
+        // symbol fonts, and an emoji by default stays in colour though those fonts have it.
+        save(
+            note(
+                p("Arrows and symbols", Role.ROLE_TITLE),
+                p("Pasted arrows: ← → ↑ ↓ ↔ ⇒ ⇐ ⟶ ➜ ⬅ ↩"),
+                p("In bold, italic and code: → ⇒ ➜").addRuns(run(26, 1).setBold(true)).addRuns(run(28, 1).setItalic(true)).addRuns(run(30, 1).setCode(true)),
+                list("Plan → build → ship", ListKind.LIST_KIND_BULLETED, 6),
+                p("Still emoji: ⭐ ✅ 👍 and ↔️ when asked for."),
+            ),
         )
         val old = newId()
         store.save(note(p("Old shopping list", Role.ROLE_TITLE), p("milk, bread")), old, now = t.minusSeconds(90_000))

@@ -12,8 +12,8 @@ import com.syncednotes.engine.text.ValueStyle
 /**
  * A note as Markdown, the form an AI agent reads and writes, line for line as [MarkdownReader]
  * reads it back: each paragraph a line, headings, lists, checklists, quotes, fenced code in its
- * language, callouts as GitHub's alerts (`> [!NOTE]`), dividers, bold, italic, strikethrough
- * and inline code.
+ * language, callouts as GitHub's alerts (`> [!NOTE]`), tables as GitHub's, dividers, bold,
+ * italic, strikethrough and inline code.
  *
  * What Markdown has no way to say is left out: underline, text colours, highlights, sizes,
  * alignment, indents. A picture is shown as `[picture]`.
@@ -40,6 +40,31 @@ object MarkdownWriter {
                 lines += fence + language
                 lines += code
                 lines += fence
+                continue
+            }
+            if (style.cell != null) {
+                // A table as GitHub writes one: its first row, the rule under it, then the rest.
+                // Markdown has no table without a header, so a first row is always written as one.
+                val table = style.cell.table
+                var row = -1
+                var cells = ArrayList<String>()
+                var rows = 0
+                fun endRow() {
+                    if (row < 0) return
+                    lines += "| " + cells.joinToString(" | ") + " |"
+                    if (rows++ == 0) lines += "|" + cells.joinToString("|") { " --- " } + "|"
+                    cells = ArrayList()
+                }
+                while (p < document.paragraphCount && document.paragraphStyle(p).cell?.table == table) {
+                    val cell = document.paragraphStyle(p).cell!!
+                    if (cell.row != row) {
+                        endRow()
+                        row = cell.row
+                    }
+                    cells += line(document, p, document.paragraphStyle(p).copy(cell = null)).replace("|", "\\|")
+                    p++
+                }
+                endRow()
                 continue
             }
             if (style.role == Role.CALLOUT) {
@@ -208,6 +233,8 @@ fun TextDocument.appendFragment(fragment: Fragment) {
     if (fragment.paragraphs.isEmpty()) return
     val empty = length == 0 && paragraphCount == 1
     val listBase = if (empty) 0 else (0 until paragraphCount).maxOf { p -> paragraphStyle(p).lists.maxOfOrNull { it.id } ?: 0 }
+    // A table written right after one already there stays a table of its own.
+    val tableBase = if (empty) 0 else (0 until paragraphCount).maxOf { p -> paragraphStyle(p).cell?.table ?: 0 }
     val at = length
     val inserted = (if (empty) "" else "\n") + fragment.text
     replace(at, at, inserted)
@@ -217,7 +244,10 @@ fun TextDocument.appendFragment(fragment: Fragment) {
     val first = paragraphCount - fragment.paragraphs.size
     for ((k, piece) in fragment.paragraphs.withIndex()) {
         val p = first + k
-        setParagraphStyle(p, piece.style.copy(lists = piece.style.lists.map { it.copy(id = it.id + listBase) }))
+        setParagraphStyle(
+            p,
+            piece.style.copy(lists = piece.style.lists.map { it.copy(id = it.id + listBase) }, cell = piece.style.cell?.let { it.copy(table = it.table + tableBase) }),
+        )
         val base = paragraphStart(p)
         for (span in piece.spans) setStyle(span.style, true, base + span.start, base + span.end)
     }

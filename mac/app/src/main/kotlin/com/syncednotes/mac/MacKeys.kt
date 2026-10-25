@@ -52,6 +52,11 @@ object MacKeys {
             KeyEvent.VK_TAB -> if (shift) null else Key.TAB
             else -> return false
         }
+        // In a table, Tab goes on to the next cell and Shift-Tab back, as in Notion.
+        if (event.keyCode == KeyEvent.VK_TAB && composer.inTable) {
+            composer.onKey(Key.TAB, shift, false, t)
+            return true
+        }
         // Shift-Tab steps a list item or indent back out, as Tab steps it in.
         if (key == null) {
             composer.outdent(t)

@@ -6,6 +6,7 @@ import com.syncednotes.engine.text.CharStyle
 import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.ListKind
 import com.syncednotes.engine.text.Role
+import com.syncednotes.engine.text.TableCell
 import com.syncednotes.engine.text.TextDocument
 import com.syncednotes.engine.text.ValueStyle
 import kotlin.test.Test
@@ -14,6 +15,7 @@ import kotlin.test.assertFalse
 import kotlin.test.assertTrue
 import syncednotes.note.v1.Alignment
 import syncednotes.note.v1.CalloutColor as StoredCalloutColor
+import syncednotes.note.v1.Cell
 import syncednotes.note.v1.CodeLanguage as StoredCodeLanguage
 import syncednotes.note.v1.Color
 import syncednotes.note.v1.Direction
@@ -102,7 +104,7 @@ class NoteFormatTest {
     }
 
     @Test
-    fun aPictureAmidTextOrATableIsNotEditableYet() {
+    fun aPictureAmidTextOrATableWithNoCellsIsNotEditableYet() {
         val picture = note(
             paragraph("See ￼ here").addRuns(
                 run(4, 1).setEmbedded(Embedded.newBuilder().setPicture(Picture.newBuilder().setId(ByteString.copyFrom(ByteArray(16))).setType("public.png"))),
@@ -111,6 +113,51 @@ class NoteFormatTest {
         val table = note(paragraph("￼").addRuns(run(0, 1).setEmbedded(Embedded.newBuilder().setTable(Table.newBuilder().addRows(Row.getDefaultInstance())))))
         assertFalse(NoteFormat.canEdit(picture))
         assertFalse(NoteFormat.canEdit(table))
+    }
+
+    private fun table(header: Boolean, vararg rows: List<Paragraph.Builder>) = paragraph("￼").addRuns(
+        run(0, 1).setEmbedded(
+            Embedded.newBuilder().setTable(
+                Table.newBuilder().setHeaderRow(header)
+                    .addAllRows(rows.map { r -> Row.newBuilder().addAllCells(r.map { Cell.newBuilder().addParagraphs(it).build() }).build() }),
+            ),
+        ),
+    )
+
+    @Test
+    fun aTableIsOpenedCellByCellAndSavedBackExactlyAsItWas() {
+        val stored = note(
+            paragraph("Rooms"),
+            table(true, listOf(paragraph("Room"), paragraph("Seats")), listOf(paragraph("lab/").addRuns(run(0, 4).setCode(true)), paragraph("12"))),
+            paragraph("after"),
+        )
+        assertTrue(NoteFormat.canEdit(stored))
+        val document = decoded(stored)
+        assertEquals("Rooms\nRoom\nSeats\nlab/\n12\nafter", document.text.toString())
+        assertEquals(
+            listOf(null, TableCell(1, 0, 0, true), TableCell(1, 0, 1, true), TableCell(1, 1, 0, true), TableCell(1, 1, 1, true), null),
+            (0..5).map { document.paragraphStyle(it).cell },
+        )
+        assertTrue(document.hasStyle(CharStyle.CODE, document.paragraphStart(3)))
+        assertEquals(stored, NoteFormat().encode(document))
+    }
+
+    @Test
+    fun twoTablesOneRightAfterTheOtherStayTwoTables() {
+        val stored = note(table(false, listOf(paragraph("a"))), table(true, listOf(paragraph("b"), paragraph("c"))))
+        assertTrue(NoteFormat.canEdit(stored))
+        val document = decoded(stored)
+        assertEquals(listOf(1, 2, 2), (0..2).map { document.paragraphStyle(it).cell!!.table })
+        assertEquals(listOf(false, true, true), (0..2).map { document.paragraphStyle(it).cell!!.header })
+        assertEquals(stored, NoteFormat().encode(document))
+    }
+
+    @Test
+    fun aCellHoldingTwoParagraphsOpensTheNoteReadOnly() {
+        val cell = Cell.newBuilder().addParagraphs(paragraph("one")).addParagraphs(paragraph("two"))
+        val stored = note(paragraph("￼").addRuns(run(0, 1).setEmbedded(Embedded.newBuilder().setTable(Table.newBuilder().addRows(Row.newBuilder().addCells(cell))))))
+        assertFalse(NoteFormat.canEdit(stored))
+        assertEquals("one two", decoded(stored).text.toString())
     }
 
     @Test

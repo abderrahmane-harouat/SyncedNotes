@@ -18,7 +18,8 @@ class ParagraphLayout(
     val text: String,
     run: ShapedRun,
     val runs: StyleRuns,
-    maxWidth: Float,
+    /** The width it was broken into lines for, margins included. */
+    val maxWidth: Float,
     /** Ascent and descent of the font per pixel of text size. */
     private val ascentPerPx: Float,
     private val descentPerPx: Float,
@@ -69,6 +70,10 @@ class ParagraphLayout(
     private val available = (maxWidth - textLeft - textRight).coerceAtLeast(1f)
     val lineStarts: IntArray
     val lineCount: Int
+    /** The text on one unbroken line: what a table's column needs to show it without wrapping. */
+    val naturalWidth: Float
+    /** The widest stretch between two places a line may break: a column narrower cuts a word. */
+    val longestWord: Float
     val height: Float
     private val lineTops: FloatArray
     private val lineHeights: FloatArray
@@ -100,6 +105,16 @@ class ParagraphLayout(
         }
         lineStarts = starts.toIntArray()
         lineCount = lineStarts.size
+        naturalWidth = widthOf(0, text.length)
+        var widest = 0f
+        var from = 0
+        for (i in 1..text.length) {
+            if (i == text.length || breaks[i]) {
+                widest = maxOf(widest, widthOf(from, i))
+                from = i
+            }
+        }
+        longestWord = widest
 
         // Each line is as tall as its largest text, with the extra spacing split above and
         // below the glyphs so the text sits centred in its line.

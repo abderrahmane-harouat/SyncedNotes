@@ -175,6 +175,8 @@ message Picture {
 
 message Table {
   repeated Row rows = 1;
+  // Whether the first row is the table's header: shaded and bold, as a web page's <th> row.
+  bool header_row = 2;
 }
 
 message Row {

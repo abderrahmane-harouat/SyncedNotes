@@ -7,6 +7,7 @@ import com.syncednotes.engine.text.ListKind
 import com.syncednotes.engine.text.ListLevel
 import com.syncednotes.engine.text.ParagraphStyle
 import com.syncednotes.engine.text.Role
+import com.syncednotes.engine.text.TableCell
 
 /**
  * Reads Markdown, which the Copy buttons under Claude's and ChatGPT's answers put on the
@@ -62,6 +63,7 @@ object MarkdownReader {
         // The lists open at this line: each with the indent its items' markers are at.
         val lists = ArrayList<Pair<Int, ListLevel>>()
         var listIds = 0
+        var tables = 0
         var blankPending = false
         var i = 0
         fun blank() {
@@ -173,11 +175,17 @@ object MarkdownReader {
             if (TABLE_ROW.matches(line)) {
                 lists.clear()
                 blank()
+                // A table: its header row, the rule under it, then every row up to the first
+                // line that is not one; a cell a paragraph, short rows filled out with empty cells.
                 val header = next != null && TABLE_RULE.matches(next)
-                val cells = line.trim().removePrefix("|").removeSuffix("|").split('|').map { it.trim() }
-                val joined = cells.joinToString(" | ")
-                inline(out, if (header) "**" + cells.joinToString("** | **") + "**" else joined, ParagraphStyle.DEFAULT)
+                val rows = arrayListOf(cellsOf(line))
                 i += if (header) 2 else 1
+                while (i < lines.size && TABLE_ROW.matches(lines[i])) rows += cellsOf(lines[i++])
+                val columns = rows.maxOf { it.size }
+                val id = ++tables
+                for ((r, row) in rows.withIndex()) for (c in 0 until columns) {
+                    inline(out, row.getOrElse(c) { "" }, ParagraphStyle(cell = TableCell(id, r, c, header)), heading = header && r == 0)
+                }
                 continue
             }
             val item = ITEM.matchEntire(line)
@@ -218,6 +226,39 @@ object MarkdownReader {
     }
 
     /** One line of text, with its bold, italic, strikethrough, code and links read. */
+    /**
+     * A table row's cells: between its bars, except a bar written \| and one inside `code`,
+     * which are the cell's own.
+     */
+    private fun cellsOf(line: String): List<String> {
+        val row = line.trim().removePrefix("|").removeSuffix("|")
+        val cells = ArrayList<String>()
+        val cell = StringBuilder()
+        var code = false
+        var i = 0
+        while (i < row.length) {
+            val ch = row[i]
+            when {
+                ch == '\\' && i + 1 < row.length && row[i + 1] == '|' -> {
+                    cell.append('|')
+                    i++
+                }
+                ch == '`' -> {
+                    code = !code
+                    cell.append(ch)
+                }
+                ch == '|' && !code -> {
+                    cells += cell.toString().trim()
+                    cell.setLength(0)
+                }
+                else -> cell.append(ch)
+            }
+            i++
+        }
+        cells += cell.toString().trim()
+        return cells
+    }
+
     private fun inline(out: FragmentBuilder, text: String, style: ParagraphStyle, heading: Boolean = false) {
         out.startParagraph(style)
         spans(out, text, emptySet(), heading)

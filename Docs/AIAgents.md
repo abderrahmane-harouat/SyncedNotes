@@ -62,11 +62,13 @@ passes each message to the app and prints the answer, nothing to install, to put
 Notes are Markdown a line per paragraph, as `MarkdownWriter` and `MarkdownReader` in the
 engine write and read it: headings, lists, checklists, quotes, fenced code in its language,
 callouts as GitHub's alerts (`> [!NOTE]` blue, `[!TIP]` green, `[!WARNING]` orange,
-`[!IMPORTANT]` purple, `[!CAUTION]` pink, `[!GRAY]`), dividers, bold, italic, strikethrough,
-inline code. Markdown cannot say underline, colours,
+`[!IMPORTANT]` purple, `[!CAUTION]` pink, `[!GRAY]`), tables as GitHub's (`| a | b |`, the
+rule `| --- | --- |` under the first row), dividers, bold, italic, strikethrough, inline code.
+Markdown cannot say underline, colours,
 highlights or sizes, so `replace_in_note` is the way to change part of a note: it edits the
 note's own text in the engine, and everything around the change stays as it was. A note the
-engine cannot edit (a table, a picture amid text) is read, never written, as in the app.
+engine cannot edit (a picture amid text, a table cell of several paragraphs) is read, never
+written, as in the app.
 
 Every change is saved locked, like a change typed in the app, and syncs to the phone. If the
 note is open, what was typed in it is saved first, so the agent works on the note as it is on

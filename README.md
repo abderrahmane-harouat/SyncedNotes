@@ -45,6 +45,10 @@ until the new one does everything it did. Not independently reviewed. What comes
   from the toolbar's callout button on the Mac or the swatches in the phone's Text options;
   inline code sits on a chip of its own. Coloured boxes pasted from a web page or Notion come in
   as callouts, and Markdown's `> [!NOTE]` alerts too.
+- **Tables.** A table as Notion draws one, its columns as wide as their text, a shaded header
+  row: from the toolbar's table button on the Mac (⌥⌘T) or the phone's Text options, with rows
+  and columns added or taken away there. Tab and Return go from cell to cell. A table pasted
+  from a web page, Notion, VS Code or Markdown comes in as a table.
 - **A folder for your AI agent.** Share one folder with Claude Code, Claude Desktop or opencode,
   on your subscription, and the agent can read, change and add notes there through MCP, and see
   nothing else ([`Docs/AIAgents.md`](Docs/AIAgents.md)). It is the one way notes leave your
@@ -63,7 +67,7 @@ until the new one does everything it did. Not independently reviewed. What comes
 - **Encrypted backups** to a file you choose, imported by adding to your notes or replacing them
   (what the backup lacks goes to the Trash), and a passphrase you can change at any time.
 
-Not in the rebuilt app yet: a picture amid text and tables (a note holding one opens read-only,
+Not in the rebuilt app yet: a picture amid text (a note holding one opens read-only,
 and is never saved over), pasting with formatting, dragging notes onto folders, and lists that
 start as you type.
 
@@ -235,7 +239,7 @@ Kotlin lock.
 
 ## Roadmap
 
-Pictures amid text, tables, and pasting with formatting come first; then automatic encrypted
+Pictures amid text and pasting with formatting come first; then automatic encrypted
 backups, auto-lock on the Mac, find and replace, links, tags, export to Markdown and PDF, and
 note history. The full list is in [`TODO.md`](TODO.md).
 

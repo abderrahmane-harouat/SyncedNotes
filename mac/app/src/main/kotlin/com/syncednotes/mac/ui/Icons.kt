@@ -82,6 +82,12 @@ object Icons {
         "M5.5 5h13A2.5 2.5 0 0 1 21 7.5v9a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 16.5v-9A2.5 2.5 0 0 1 5.5 5z",
         "M7 9.5h10", "M7 13h6.5",
     )
+    /** A table: a rounded frame, its header row ruled off, its columns apart. */
+    val table = icon(
+        "tablecells",
+        "M5.5 4.5h13A2.5 2.5 0 0 1 21 7v10a2.5 2.5 0 0 1-2.5 2.5h-13A2.5 2.5 0 0 1 3 17V7a2.5 2.5 0 0 1 2.5-2.5z",
+        "M3 9.5h18", "M3 14.5h18", "M9.5 9.5v10", "M15 9.5v10",
+    )
     /** Two sparkles: an AI agent, as the folder shared with one is marked. */
     val agent = icon(
         "sparkles", filled = listOf(

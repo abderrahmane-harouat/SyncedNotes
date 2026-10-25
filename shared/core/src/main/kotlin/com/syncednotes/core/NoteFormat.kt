@@ -9,12 +9,14 @@ import com.syncednotes.engine.text.ListKind
 import com.syncednotes.engine.text.ListLevel
 import com.syncednotes.engine.text.ParagraphStyle
 import com.syncednotes.engine.text.Role
+import com.syncednotes.engine.text.TableCell
 import com.syncednotes.engine.text.TextDocument
 import com.syncednotes.engine.text.ValueStyle
 import com.syncednotes.engine.text.relativeSize
 import com.syncednotes.engine.text.sizeValue
 import kotlin.math.roundToInt
 import syncednotes.note.v1.CalloutColor as StoredCalloutColor
+import syncednotes.note.v1.Cell
 import syncednotes.note.v1.CodeLanguage as StoredCodeLanguage
 import syncednotes.note.v1.Color
 import syncednotes.note.v1.Divider
@@ -24,7 +26,9 @@ import syncednotes.note.v1.ListLevel as StoredListLevel
 import syncednotes.note.v1.Note
 import syncednotes.note.v1.Paragraph
 import syncednotes.note.v1.Picture
+import syncednotes.note.v1.Row
 import syncednotes.note.v1.Run
+import syncednotes.note.v1.Table
 import syncednotes.note.v1.Alignment as StoredAlignment
 import syncednotes.note.v1.Direction as StoredDirection
 import syncednotes.note.v1.ListKind as StoredListKind
@@ -48,7 +52,7 @@ class NoteFormat {
 
     /** Writes [note]'s text and formatting into [document], which must be empty. */
     fun decode(note: Note, document: TextDocument) {
-        val paragraphs = note.paragraphsList.ifEmpty { listOf(Paragraph.getDefaultInstance()) }
+        val (paragraphs, cells) = withCells(note.paragraphsList.ifEmpty { listOf(Paragraph.getDefaultInstance()) })
         document.replace(0, document.length, paragraphs.joinToString("\n") { it.text })
         for ((index, stored) in paragraphs.withIndex()) {
             // A picture on a line of its own is the engine's: a paragraph showing it. One
@@ -56,7 +60,7 @@ class NoteFormat {
             val picture = stored.runsList.singleOrNull()?.takeIf {
                 stored.text == OBJECT.toString() && it.start == 0 && it.length == 1 && it.embedded.hasPicture()
             }?.embedded?.picture
-            val style = paragraphStyle(stored)
+            val style = paragraphStyle(stored).copy(cell = cells[index])
             document.setParagraphStyle(index, if (picture != null) style.copy(picture = PictureHandles.handle(picture)) else style)
             val base = document.paragraphStart(index)
             for (run in stored.runsList) {
@@ -85,8 +89,67 @@ class NoteFormat {
     /** The document as a stored note. */
     fun encode(document: TextDocument): Note {
         val note = Note.newBuilder().setFormatVersion(1)
-        for (p in 0 until document.paragraphCount) note.addParagraphs(paragraph(document, p))
+        var p = 0
+        while (p < document.paragraphCount) {
+            val cell = document.paragraphStyle(p).cell
+            if (cell == null) {
+                note.addParagraphs(paragraph(document, p))
+                p++
+                continue
+            }
+            // A table's cells, one paragraph each in the engine, are one table stored in the
+            // paragraph of one U+FFFC that stands where the table is, as a picture is stored.
+            val table = Table.newBuilder().setHeaderRow(cell.header)
+            var row: Row.Builder? = null
+            var rowNumber = -1
+            while (p < document.paragraphCount && document.paragraphStyle(p).cell?.table == cell.table) {
+                val here = document.paragraphStyle(p).cell!!
+                if (row == null || here.row != rowNumber) {
+                    row?.let { table.addRows(it) }
+                    row = Row.newBuilder()
+                    rowNumber = here.row
+                }
+                row.addCells(Cell.newBuilder().addParagraphs(paragraph(document, p)))
+                p++
+            }
+            row?.let { table.addRows(it) }
+            note.addParagraphs(
+                Paragraph.newBuilder().setText(OBJECT.toString())
+                    .addRuns(Run.newBuilder().setStart(0).setLength(1).setEmbedded(Embedded.newBuilder().setTable(table))),
+            )
+        }
         return note.build()
+    }
+
+    /**
+     * The stored paragraphs with each table in them opened out into its cells, a paragraph a
+     * cell, row after row, and where each is in its table. A cell holding more than one
+     * paragraph is not the engine's yet: its paragraphs read as one line, and the note then
+     * not coming back as it was is what makes [canEdit] refuse it.
+     */
+    private fun withCells(stored: List<Paragraph>): Pair<List<Paragraph>, List<TableCell?>> {
+        val paragraphs = ArrayList<Paragraph>()
+        val cells = ArrayList<TableCell?>()
+        var tables = 0
+        for (paragraph in stored) {
+            val table = paragraph.runsList.singleOrNull()?.takeIf {
+                paragraph.text == OBJECT.toString() && it.start == 0 && it.length == 1 && it.embedded.hasTable()
+            }?.embedded?.table
+            if (table == null || table.rowsList.all { it.cellsCount == 0 }) {
+                paragraphs += paragraph
+                cells += null
+                continue
+            }
+            tables++
+            for ((r, row) in table.rowsList.withIndex()) {
+                for ((c, cell) in row.cellsList.withIndex()) {
+                    paragraphs += cell.paragraphsList.singleOrNull()
+                        ?: Paragraph.newBuilder().setText(cell.paragraphsList.joinToString(" ") { it.text }).build()
+                    cells += TableCell(tables, r, c, table.headerRow)
+                }
+            }
+        }
+        return paragraphs to cells
     }
 
     private fun paragraphStyle(stored: Paragraph): ParagraphStyle =

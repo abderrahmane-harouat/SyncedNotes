@@ -45,6 +45,14 @@ enum class CalloutColor(val title: String) { BLUE("Blue"), GREEN("Green"), ORANG
 data class ListLevel(val kind: ListKind, val id: Int, val start: Int = 0)
 
 /**
+ * Where a paragraph sits in a table. Each cell of a table is one paragraph of the note, the
+ * cells in reading order, row after row, so typing, the keyboard, undo and find work in a cell
+ * as anywhere else; only the layout puts a row's cells side by side. [table] tells a table from
+ * one right after it; [header] is the table's, the same on every cell: its first row is a header.
+ */
+data class TableCell(val table: Int, val row: Int, val column: Int, val header: Boolean = false)
+
+/**
  * What a paragraph carries as a whole, field for field the note format's Paragraph, so a note
  * read into the engine is saved back exactly as it was.
  */
@@ -69,6 +77,8 @@ data class ParagraphStyle(
     val language: CodeLanguage = CodeLanguage.NONE,
     /** Only meaningful for a callout; paragraphs next to each other with the same are one callout. */
     val callout: CalloutColor = CalloutColor.BLUE,
+    /** The table cell this paragraph is; null for one outside any table. A cell is body text. */
+    val cell: TableCell? = null,
 ) {
     /** A paragraph that is one thing rather than text: a divider or a picture. */
     val isObject: Boolean get() = role == Role.DIVIDER || picture != 0

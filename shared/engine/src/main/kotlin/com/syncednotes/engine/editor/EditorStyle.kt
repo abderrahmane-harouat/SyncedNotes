@@ -88,6 +88,18 @@ data class EditorStyle(
     val inlineCodeRadius: Float = 0f,
     /** The colour of each [TokenKind] in a code block with a language, in the kinds' order. */
     val codeColors: List<Int> = codeColors(dark = false),
+    /**
+     * A table, as Notion draws one: thin lines between its cells and around them, a header row
+     * on a faint shade, a cell's text held off its lines; the room above and below the table,
+     * and how wide a column is while its text needs less.
+     */
+    val tableLineColor: Int = 0,
+    val tableLineWidth: Float = 0f,
+    val tableHeaderColor: Int = 0,
+    val cellPaddingX: Float = 0f,
+    val cellPaddingY: Float = 0f,
+    val tableMargin: Float = 0f,
+    val columnWidth: Float = 0f,
 ) {
     /** The default text size in pixels. */
     val textSize: Float get() = defaultSize * sizeUnit
@@ -213,6 +225,13 @@ data class EditorStyle(
                 findEdge = 1f * density,
                 pictureScale = density,
                 codeColors = codeColors(dark),
+                tableLineColor = if (dark) 0x29FFFFFF else 0xFFE9E9E7.toInt(),
+                tableLineWidth = 1f * density,
+                tableHeaderColor = if (dark) 0x0FFFFFFF else 0xFFF7F6F3.toInt(),
+                cellPaddingX = 8f * density,
+                cellPaddingY = 6f * density,
+                tableMargin = 6f * density,
+                columnWidth = 96f * density,
             )
         }
 
@@ -283,6 +302,14 @@ data class EditorStyle(
             findEdge = 1f * scale,
             pictureScale = scale,
             codeColors = codeColors(dark),
+            // Notion's: 9 by 7 points around a cell's text, 120-point columns to start with.
+            tableLineColor = if (dark) 0x29FFFFFF else 0xFFE9E9E7.toInt(),
+            tableLineWidth = 1f * scale,
+            tableHeaderColor = if (dark) 0x0FFFFFFF else 0xFFF7F6F3.toInt(),
+            cellPaddingX = 9f * scale,
+            cellPaddingY = 7f * scale,
+            tableMargin = 6f * scale,
+            columnWidth = 120f * scale,
         )
     }
 }

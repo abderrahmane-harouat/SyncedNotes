@@ -45,6 +45,7 @@ class TextOptionsPanel(context: Context, private val composer: Composer) :
     private val indent = button(R.id.indent)
     private val outdent = button(R.id.outdent)
     private val divider = button(R.id.divider)
+    private val table = button(R.id.table)
     private val spacing = content.findViewById<View>(R.id.line_spacing)
     /** The callout colours, as round swatches in the panel shades they give. */
     private val callouts: List<Pair<View, CalloutColor>> = content.findViewById<android.widget.LinearLayout>(R.id.callouts).let { row ->
@@ -87,6 +88,31 @@ class TextOptionsPanel(context: Context, private val composer: Composer) :
         indent.setOnClickListener { composer.indent(now()) }
         outdent.setOnClickListener { composer.outdent(now()) }
         divider.setOnClickListener { composer.insertDivider(now()) }
+        // The Mac's Table menu: a new table, and with the caret in one, its rows, columns and
+        // header row.
+        table.setOnClickListener {
+            val s = composer.formatState()
+            PopupMenu(context, table, Gravity.END).apply {
+                fun item(title: Int, enabled: Boolean = s.inTable, checked: Boolean? = null, run: () -> Unit) = menu.add(title).apply {
+                    isEnabled = enabled
+                    if (checked != null) {
+                        isCheckable = true
+                        isChecked = checked
+                    }
+                    setOnMenuItemClickListener { run(); refresh(); true }
+                }
+                item(R.string.insert_table, enabled = true) { composer.insertTable(now = now()) }
+                item(R.string.add_row_above) { composer.addRow(below = false, now()) }
+                item(R.string.add_row_below) { composer.addRow(below = true, now()) }
+                item(R.string.add_column_left) { composer.addColumn(right = false, now()) }
+                item(R.string.add_column_right) { composer.addColumn(right = true, now()) }
+                item(R.string.header_row, checked = s.tableHeader) { composer.toggleHeaderRow(now()) }
+                item(R.string.delete_row) { composer.deleteRow(now()) }
+                item(R.string.delete_column) { composer.deleteColumn(now()) }
+                item(R.string.delete_table) { composer.deleteTable(now()) }
+                show()
+            }
+        }
         // The Mac's Line Spacing menu: the same four choices.
         spacing.setOnClickListener {
             PopupMenu(context, spacing, Gravity.END).apply {
@@ -110,6 +136,7 @@ class TextOptionsPanel(context: Context, private val composer: Composer) :
         for ((view, style) in styles) view.isSelected = s.has(style)
         quote.isSelected = s.role == Role.QUOTE
         codeBlock.isSelected = s.role == Role.CODE_BLOCK
+        table.isSelected = s.inTable
         setEnabled(indent, s.canIndent)
         setEnabled(outdent, s.canOutdent)
         spacingLabel.text = SPACINGS.firstOrNull { it.second == s.lineSpacing }?.first ?: ""

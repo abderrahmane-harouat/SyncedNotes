@@ -127,8 +127,8 @@ fun main() {
             ),
             work,
         )
-        // Saved last, so it is the newest and the one open at launch: arrows come from the
-        // symbol fonts, and an emoji by default stays in colour though those fonts have it.
+        // Arrows come from the symbol fonts, and an emoji by default stays in colour though
+        // those fonts have it.
         save(
             note(
                 p("Arrows and symbols", Role.ROLE_TITLE),
@@ -136,6 +136,22 @@ fun main() {
                 p("In bold, italic and code: → ⇒ ➜").addRuns(run(26, 1).setBold(true)).addRuns(run(28, 1).setItalic(true)).addRuns(run(30, 1).setCode(true)),
                 list("Plan → build → ship", ListKind.LIST_KIND_BULLETED, 6),
                 p("Still emoji: ⭐ ✅ 👍 and ↔️ when asked for."),
+            ),
+        )
+        // Saved last, so it is the newest and the one open at launch: a table as Notion draws
+        // one, its columns as wide as their text, a header row, code and bold in its cells.
+        save(
+            note(
+                p("Rooms and seats", Role.ROLE_TITLE),
+                p("A made-up building, floor by floor:"),
+                table(
+                    true,
+                    listOf(p("Room"), p("Seats"), p("What it is for")),
+                    listOf(p("lab/").addRuns(run(0, 4).setCode(true)), p("12"), p("Trying new things, with the door shut").addRuns(run(7, 3).setBold(true))),
+                    listOf(p("hall"), p("300"), p("Talks, and the long lunch on Fridays")),
+                    listOf(p("roof"), p("~40"), p("")),
+                ),
+                p("Seats are counted on Mondays."),
             ),
         )
         val old = newId()
@@ -153,6 +169,16 @@ private fun callout(color: CalloutColor, paragraph: Paragraph.Builder) = paragra
 
 /** The toolbar's Gray, with the very floats the app saves for it. */
 private val GRAY = syncednotes.note.v1.Color.newBuilder().setRed(0.56f).setGreen(0.56f).setBlue(0.60f).setAlpha(1f).build()
+
+private fun table(header: Boolean, vararg rows: List<Paragraph.Builder>) = p("\uFFFC").addRuns(
+    run(0, 1).setEmbedded(
+        Embedded.newBuilder().setTable(
+            syncednotes.note.v1.Table.newBuilder().setHeaderRow(header).addAllRows(
+                rows.map { r -> syncednotes.note.v1.Row.newBuilder().addAllCells(r.map { syncednotes.note.v1.Cell.newBuilder().addParagraphs(it).build() }).build() },
+            ),
+        ),
+    ),
+)
 
 private fun code(language: CodeLanguage, vararg lines: String) = lines.map { p(it, Role.ROLE_CODE_BLOCK).setLanguage(language) }.toTypedArray()
 private fun run(start: Int, length: Int) = Run.newBuilder().setStart(start).setLength(length)

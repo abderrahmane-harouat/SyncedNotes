@@ -23,4 +23,14 @@ public interface TableOrBuilder extends
    * <code>repeated .syncednotes.note.v1.Row rows = 1;</code>
    */
   int getRowsCount();
+
+  /**
+   * <pre>
+   * Whether the first row is the table's header: shaded and bold, as a web page's &lt;th&gt; row.
+   * </pre>
+   *
+   * <code>bool header_row = 2;</code>
+   * @return The headerRow.
+   */
+  boolean getHeaderRow();
 }

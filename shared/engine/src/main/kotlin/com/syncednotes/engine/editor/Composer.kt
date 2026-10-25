@@ -5,6 +5,7 @@ import com.syncednotes.engine.layout.DocumentLayout
 import com.syncednotes.engine.layout.ParagraphLayout
 import com.syncednotes.engine.layout.StyleRuns
 import com.syncednotes.engine.paste.Fragment
+import com.syncednotes.engine.paste.Piece
 import com.syncednotes.engine.paste.Pasted
 import com.syncednotes.engine.render.DrawList
 import com.syncednotes.engine.render.FontFamily
@@ -21,6 +22,7 @@ import com.syncednotes.engine.text.ListLevel
 import com.syncednotes.engine.text.ListType
 import com.syncednotes.engine.text.ParagraphStyle
 import com.syncednotes.engine.text.Role
+import com.syncednotes.engine.text.TableCell
 import com.syncednotes.engine.text.TextDocument
 import com.syncednotes.engine.text.ValueRanges
 import com.syncednotes.engine.text.ValueStyle
@@ -56,6 +58,8 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         calloutIndent = style.calloutPadding,
         calloutTop = style.calloutMargin + style.calloutPaddingVertical,
         calloutBottom = style.calloutPaddingVertical + style.calloutMargin,
+        cellPaddingX = style.cellPaddingX, cellPaddingY = style.cellPaddingY,
+        tableMargin = style.tableMargin, columnWidth = style.columnWidth,
     )
 
     /** Where the note's pictures come from; none shows each as an empty frame. */
@@ -200,6 +204,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         format: (() -> Unit)? = null,
     ) {
         if (!editable) return
+        if (!restructuring && keepsTables(start, end, text, after, now, fromInput, format)) return
         val before = selection
         // Typing hides the insertion handle, as on Samsung and stock Android; it comes back
         // with the next tap.
@@ -311,7 +316,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
 
     /** Text typed on a hardware keyboard: replaces the selection, like the IME would. */
     fun type(text: CharSequence, now: Long) {
-        if (text.length == 1 && text[0] == '\n' && leaveEmptyListItem(now)) return
+        if (text.length == 1 && text[0] == '\n' && (cellBelow(now) || leaveEmptyListItem(now))) return
         if (text.isNotEmpty() && text[0] != '\n' && text[0] != TextDocument.OBJECT) leaveObjectParagraph(now)
         clearComposing()
         val s = selection.start
@@ -343,8 +348,16 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
      * as typed ones would, so plain lines pasted into a list go on with the list; in what has
      * headings, lists or code, a plain line is body text, as it was where it was copied from.
      */
-    private fun pasteFragment(fragment: Fragment, now: Long) {
+    private fun pasteFragment(pasted: Fragment, now: Long) {
         leaveObjectParagraph(now)
+        // A selection across a table is emptied as typing over it would, before what is pasted.
+        if (!selection.isCollapsed && selectedParagraphs().any { document.paragraphStyle(it).cell != null }) deleteSelection(now)
+        // Into a cell, what is pasted is text: a cell holds no headings, lists or tables.
+        if (document.paragraphStyle(document.paragraphAt(selection.start)).cell != null) {
+            type(pasted.text.replace('\n', ' ').replace(TextDocument.OBJECT.toString(), ""), now)
+            return
+        }
+        val fragment = aroundTables(pasted, selection.start == document.paragraphStart(document.paragraphAt(selection.start)))
         val sel = selection
         val start = sel.start
         val text = fragment.text
@@ -355,6 +368,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val fillsParagraph = beginsParagraph && sel.end == document.paragraphEnd(lastParagraph)
         val structured = fragment.paragraphs.any { it.style != ParagraphStyle.DEFAULT }
         val listBase = (0 until document.paragraphCount).maxOfOrNull { p -> document.paragraphStyle(p).lists.maxOfOrNull { it.id } ?: 0 } ?: 0
+        val tableBase = newTableId()
         clearComposing()
         edit(start, sel.end, text, Selection(start + text.length), now, mergeable = false, fromInput = false) {
             val end = start + text.length
@@ -366,7 +380,8 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                 val takesStyle = k > 0 || fillsParagraph || (beginsParagraph && fragment.paragraphs.size > 1)
                 if (takesStyle && (structured || document.paragraphStyle(p).isObject)) {
                     val lists = piece.style.lists.map { it.copy(id = it.id + listBase) }
-                    document.setParagraphStyle(p, piece.style.copy(lists = lists, direction = document.paragraphStyle(p).direction))
+                    val cell = piece.style.cell?.let { it.copy(table = it.table + tableBase) }
+                    document.setParagraphStyle(p, piece.style.copy(lists = lists, cell = cell, direction = document.paragraphStyle(p).direction))
                 }
                 for (span in piece.spans) document.setStyle(span.style, true, at + span.start, at + span.end)
                 at += piece.text.length + 1
@@ -410,7 +425,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         if (newCursorPosition > 0) start + text.length + newCursorPosition - 1 else start + newCursorPosition
 
     fun commitText(text: CharSequence, newCursorPosition: Int, now: Long) = batch {
-        if (composingStart < 0 && text.length == 1 && text[0] == '\n' && leaveEmptyListItem(now)) return@batch
+        if (composingStart < 0 && text.length == 1 && text[0] == '\n' && (cellBelow(now) || leaveEmptyListItem(now))) return@batch
         if (composingStart < 0 && text.isNotEmpty() && text[0] != '\n') leaveObjectParagraph(now)
         val (s, e) = replacementRange()
         val cursor = cursorAfter(s, text, newCursorPosition)
@@ -503,7 +518,27 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         return document.substring(e, (e + n).coerceAtMost(document.length))
     }
 
-    fun selectedText(): String? = if (selection.isCollapsed) null else document.substring(selection.start, selection.end)
+    /**
+     * The selection as plain text. A table's cells are set apart by tabs and its rows by lines,
+     * as a spreadsheet copies them, so they paste into one as cells.
+     */
+    fun selectedText(): String? {
+        val sel = selection
+        if (sel.isCollapsed) return null
+        val first = document.paragraphAt(sel.start)
+        val last = document.paragraphAt(sel.end)
+        if ((first..last).none { document.paragraphStyle(it).cell != null }) return document.substring(sel.start, sel.end)
+        val out = StringBuilder()
+        for (p in first..last) {
+            if (p > first) {
+                val a = document.paragraphStyle(p - 1).cell
+                val b = document.paragraphStyle(p).cell
+                out.append(if (a != null && b != null && a.table == b.table && a.row == b.row) '\t' else '\n')
+            }
+            out.append(document.substring(maxOf(sel.start, document.paragraphStart(p)), minOf(sel.end, document.paragraphEnd(p))))
+        }
+        return out.toString()
+    }
 
     /** Whether the next letter should be capitalised: at the start of a sentence, or a word. */
     fun capitalisationAtCursor(): Capitalisation {
@@ -564,6 +599,9 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val codeLanguage: CodeLanguage? = null,
         /** The colour, when every paragraph is a callout of the same one; null otherwise. */
         val calloutColor: CalloutColor? = null,
+        /** Whether the caret is in a table, and whether that table's first row is its header. */
+        val inTable: Boolean = false,
+        val tableHeader: Boolean = false,
     ) {
         fun has(style: CharStyle): Boolean = when (style) {
             CharStyle.BOLD -> bold
@@ -609,6 +647,8 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             lineSpacing = styles.map { if (it.lineSpacing == 0f) 1f else it.lineSpacing }.distinct().singleOrNull(),
             codeLanguage = styles.takeIf { all -> all.all { it.role == Role.CODE_BLOCK } }?.map { it.language }?.distinct()?.singleOrNull(),
             calloutColor = styles.takeIf { all -> all.all { it.role == Role.CALLOUT } }?.map { it.callout }?.distinct()?.singleOrNull(),
+            inTable = inTable,
+            tableHeader = document.paragraphStyle(document.paragraphAt(selection.focus)).cell?.header == true,
         )
     }
 
@@ -701,7 +741,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
      * just above when that is the same kind at the same level, so its numbering runs on.
      */
     fun toggleList(type: ListType, now: Long) {
-        val range = selectedParagraphs()
+        val range = selectedBlocks() ?: return
         val allAlready = range.all { document.paragraphStyle(it).list == type }
         val target = if (allAlready) ListType.NONE else type
         formatEdit(now) {
@@ -747,7 +787,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
      * choosing the role they all have already puts them back to body text.
      */
     fun toggleRole(role: Role, now: Long) {
-        val range = selectedParagraphs()
+        val range = selectedBlocks() ?: return
         val target = if (role != Role.BODY && range.all { document.paragraphStyle(it).role == role }) Role.BODY else role
         // Code joining a block above or below is in that block's language, as all of a block is.
         val language = if (target == Role.CODE_BLOCK) neighbouringLanguage(range) else CodeLanguage.NONE
@@ -767,7 +807,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
      * already code in puts them back to body text, as choosing a role they have does.
      */
     fun toggleCodeBlock(language: CodeLanguage, now: Long) {
-        val range = selectedParagraphs().filter { !document.paragraphStyle(it).isObject }
+        val range = selectedParagraphs().filter { !document.paragraphStyle(it).isObject && document.paragraphStyle(it).cell == null }
         if (range.isEmpty()) return
         if (range.all { document.paragraphStyle(it).let { s -> s.role == Role.CODE_BLOCK && s.language == language } }) {
             formatEdit(now) {
@@ -795,7 +835,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
      * a role they have does.
      */
     fun toggleCallout(color: CalloutColor, now: Long) {
-        val range = selectedParagraphs().filter { !document.paragraphStyle(it).isObject }
+        val range = selectedParagraphs().filter { !document.paragraphStyle(it).isObject && document.paragraphStyle(it).cell == null }
         if (range.isEmpty()) return
         if (range.all { document.paragraphStyle(it).let { s -> s.role == Role.CALLOUT && s.callout == color } }) {
             formatEdit(now) { for (p in range) document.setParagraphStyle(p, document.paragraphStyle(p).copy(role = Role.BODY)) }
@@ -881,9 +921,9 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
      */
     fun insertDivider(now: Long) {
         if (!editable) return
-        val p = document.paragraphAt(selection.end)
+        val p = layout.tableRange(document.paragraphAt(selection.end)).last
         select(Selection(document.paragraphEnd(p)), now)
-        type("\n\uFFFC\n", now)
+        restructured { type("\n\uFFFC\n", now) }
         formatEdit(now) {
             document.setParagraphStyle(p + 1, ParagraphStyle(role = Role.DIVIDER))
             document.setParagraphStyle(p + 2, ParagraphStyle.DEFAULT)
@@ -897,8 +937,8 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
      */
     fun insertPicture(handle: Int, now: Long) {
         if (!editable) return
-        val p = document.paragraphAt(selection.end)
-        val empty = document.paragraphStart(p) == document.paragraphEnd(p) && !document.paragraphStyle(p).isObject
+        val p = layout.tableRange(document.paragraphAt(selection.end)).last
+        val empty = document.paragraphStart(p) == document.paragraphEnd(p) && !document.paragraphStyle(p).isObject && document.paragraphStyle(p).cell == null
         if (empty) {
             val at = document.paragraphStart(p)
             select(Selection(at), now)
@@ -910,7 +950,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             return
         }
         select(Selection(document.paragraphEnd(p)), now)
-        type("\n\uFFFC\n", now)
+        restructured { type("\n\uFFFC\n", now) }
         formatEdit(now) {
             document.setParagraphStyle(p + 1, ParagraphStyle(picture = handle))
             document.setParagraphStyle(p + 2, ParagraphStyle.DEFAULT)
@@ -942,6 +982,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         formatEdit(now) {
             for (p in selectedParagraphs()) {
                 val s = document.paragraphStyle(p)
+                if (s.cell != null) continue
                 val next = when {
                     s.depth > 0 && by > 0 && s.depth < ParagraphStyle.MAX_LIST_DEPTH -> s.copy(lists = s.lists + nestedLevel(p, s))
                     s.depth > 1 && by < 0 -> s.copy(lists = s.lists.dropLast(1))
@@ -957,6 +998,17 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val above = if (p > 0) document.paragraphStyle(p - 1).lists else emptyList()
         if (above.size > s.depth && above.subList(0, s.depth) == s.lists) return above[s.depth]
         return ListLevel(s.lists.last().kind, newListId())
+    }
+
+    /**
+     * The paragraphs the selection touches, when they are paragraphs a role or a list can be
+     * given; null in a table, whose cells are its own.
+     */
+    private fun selectedBlocks(): IntRange? {
+        val range = selectedParagraphs()
+        val first = range.firstOrNull { document.paragraphStyle(it).cell == null } ?: return null
+        val last = range.last { document.paragraphStyle(it).cell == null }
+        return if ((first..last).any { document.paragraphStyle(it).cell != null }) null else first..last
     }
 
     /** Paragraphs the selection touches; a selection ending right at a paragraph's start leaves that one out. */
@@ -1020,6 +1072,364 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val next = stepOut(document.paragraphStyle(p)) ?: return false
         formatEdit(now) { document.setParagraphStyle(p, next) }
         return true
+    }
+
+    // --- Tables ----------------------------------------------------------------------------
+
+    /** Whether the caret is in a table's cell. */
+    val inTable: Boolean get() = document.paragraphStyle(document.paragraphAt(selection.focus)).cell != null
+
+    /** Set while a table is rebuilt by a command, whose edit [keepsTables] must leave as it is. */
+    private var restructuring = false
+
+    private inline fun restructured(block: () -> Unit) {
+        restructuring = true
+        try {
+            block()
+        } finally {
+            restructuring = false
+        }
+    }
+
+    private fun cellOf(p: Int): TableCell? = document.paragraphStyle(p).cell
+
+    /**
+     * Keeps every table whole through an edit of [start, end) with [text], whatever made it:
+     * typing, Backspace, the phone's keyboard, a paste. Two cells are never joined, nor a cell
+     * to the text around its table, and a cell never takes a line break, which would split it.
+     * Returns true when it made the edit itself, in the form that keeps the tables.
+     */
+    private fun keepsTables(start: Int, end: Int, text: CharSequence, after: Selection, now: Long, fromInput: Boolean, format: (() -> Unit)?): Boolean {
+        val pa = document.paragraphAt(start)
+        val pb = document.paragraphAt(end)
+        if (pa == pb) {
+            if (cellOf(pa) == null || !text.contains('\n')) return false
+            // A line break would split the cell: a space keeps the words apart instead.
+            restructured { edit(start, end, text.toString().replace('\n', ' '), after, now, mergeable = false, fromInput = fromInput) }
+            return true
+        }
+        if ((pa..pb).none { cellOf(it) != null }) return false
+        if (text.isEmpty() && pb == pa + 1 && end - start == 1) {
+            val aEmpty = document.paragraphStart(pa) == document.paragraphEnd(pa)
+            val bEmpty = document.paragraphStart(pb) == document.paragraphEnd(pb)
+            when {
+                // An empty line after a table goes, as any empty line does...
+                cellOf(pa) != null && cellOf(pb) == null && bEmpty -> return false
+                // ...and one before it, the table's first cell staying a cell.
+                cellOf(pa) == null && aEmpty -> {
+                    val cell = document.paragraphStyle(pb)
+                    restructured { edit(start, end, "", after, now, mergeable = false, fromInput = fromInput) { document.setParagraphStyle(pa, cell) } }
+                }
+                // Anything else would join a cell to what is beside it: the caret goes there instead.
+                else -> select(after, now)
+            }
+            return true
+        }
+        val whole = (pa..pb).filter { cellOf(it) != null }.map { layout.tableRange(it) }.distinct()
+            .all { document.paragraphStart(it.first) >= start && document.paragraphEnd(it.last) <= end }
+        if (whole) {
+            // Whole tables go as any lines would; what is left where one began is not a cell.
+            val merged = when {
+                cellOf(pa) == null -> null
+                cellOf(pb) == null -> document.paragraphStyle(pb)
+                else -> ParagraphStyle.DEFAULT
+            }
+            val breaks = text.count { it == '\n' }
+            restructured {
+                edit(start, end, text, after, now, mergeable = false, fromInput = fromInput) {
+                    format?.invoke()
+                    if (merged != null) document.setParagraphStyle(pa, merged)
+                    for (q in pa..pa + breaks) if (document.paragraphStyle(q).cell != null) document.setParagraphStyle(q, ParagraphStyle.DEFAULT)
+                }
+            }
+            return true
+        }
+        // Part of a table: each cell and line the selection touches is emptied where it is.
+        val styles = (pa..pb).map { document.paragraphStyle(it) }
+        val typed = text.toString().replace('\n', ' ')
+        val replacement = typed + "\n".repeat(pb - pa)
+        if (replacement == document.substring(start, end)) {
+            select(Selection(start), now)
+            return true
+        }
+        restructured {
+            edit(start, end, replacement, Selection(start + typed.length), now, mergeable = false, fromInput = fromInput) {
+                for ((k, style) in styles.withIndex()) document.setParagraphStyle(pa + k, style)
+            }
+        }
+        return true
+    }
+
+    /** A table ID no paragraph uses yet. */
+    private fun newTableId(): Int {
+        var max = 0
+        for (p in 0 until document.paragraphCount) document.paragraphStyle(p).cell?.let { max = maxOf(max, it.table) }
+        return max + 1
+    }
+
+    /**
+     * A table pasted is a block of its own: on a new line when the caret is in the middle of
+     * one, and with a line after it to go on writing in.
+     */
+    private fun aroundTables(fragment: Fragment, atParagraphStart: Boolean): Fragment {
+        val pieces = fragment.paragraphs
+        if (pieces.none { it.style.cell != null }) return fragment
+        val out = ArrayList<Piece>()
+        if (!atParagraphStart && pieces.first().style.cell != null) out += Piece("", ParagraphStyle.DEFAULT)
+        out += pieces
+        if (pieces.last().style.cell != null) out += Piece("", ParagraphStyle.DEFAULT)
+        return Fragment(out)
+    }
+
+    /**
+     * Return in a cell goes to the cell below, as in Notion, adding a row under the last; a
+     * cell is one paragraph, so there is no line to add inside it.
+     */
+    private fun cellBelow(now: Long): Boolean {
+        if (!selection.isCollapsed) return false
+        val p = document.paragraphAt(selection.focus)
+        val cell = cellOf(p) ?: return false
+        val row = layout.rowRange(p)
+        if (row.last == layout.tableRange(p).last) {
+            addRow(below = true, now)
+            return true
+        }
+        val next = layout.rowRange(row.last + 1)
+        val target = next.firstOrNull { cellOf(it)!!.column == cell.column } ?: next.last
+        select(Selection(document.paragraphEnd(target)), now)
+        return true
+    }
+
+    /** Tab goes on to the next cell, adding a row after the last one; Shift-Tab goes back. */
+    private fun nextCell(backward: Boolean, now: Long): Boolean {
+        val p = document.paragraphAt(selection.focus)
+        if (cellOf(p) == null) return false
+        val table = layout.tableRange(p)
+        when {
+            backward && p > table.first -> select(Selection(document.paragraphEnd(p - 1)), now)
+            backward -> {}
+            p < table.last -> select(Selection(document.paragraphEnd(p + 1)), now)
+            else -> {
+                select(Selection(document.paragraphEnd(p)), now)
+                addRow(below = true, now)
+                select(Selection(document.paragraphEnd(layout.rowRange(document.paragraphAt(selection.focus)).first)), now)
+            }
+        }
+        return true
+    }
+
+    /**
+     * A table at the very end of a note has no line below it to go on to; going down from its
+     * last row adds one, as below a code block.
+     */
+    private fun leaveTableAtEnd(now: Long): Boolean {
+        val p = document.paragraphAt(selection.focus)
+        if (cellOf(p) == null || layout.tableRange(p).last != document.paragraphCount - 1 || layout.rowRange(p).last != document.paragraphCount - 1) return false
+        if (layout.lineBounds(selection.focus, selection.upstream).last != document.paragraphEnd(p)) return false
+        val end = document.length
+        clearComposing()
+        restructured {
+            edit(end, end, "\n", Selection(end + 1), now, mergeable = false, fromInput = false) {
+                document.setParagraphStyle(document.paragraphCount - 1, ParagraphStyle.DEFAULT)
+            }
+        }
+        return true
+    }
+
+    /**
+     * A table of [rows] by [columns] empty cells below the paragraph the caret is in, its first
+     * row a header, and the caret in its first cell; an empty line takes the table itself. A line
+     * after it is there to go on writing in.
+     */
+    fun insertTable(rows: Int = 3, columns: Int = 3, now: Long) {
+        if (!editable || rows < 1 || columns < 1) return
+        val p = layout.tableRange(document.paragraphAt(selection.end)).last
+        val ps = document.paragraphStyle(p)
+        val replacesLine = document.paragraphStart(p) == document.paragraphEnd(p) && !ps.isObject && ps.cell == null
+        val cells = rows * columns
+        val id = newTableId()
+        val first = if (replacesLine) p else p + 1
+        // The line it replaces moves down below it; otherwise a line is added when none follows.
+        val lineAfter = replacesLine || p + 1 >= document.paragraphCount || cellOf(p + 1) != null
+        val at = if (replacesLine) document.paragraphStart(p) else document.paragraphEnd(p)
+        val text = "\n".repeat(if (replacesLine || !lineAfter) cells else cells + 1)
+        clearComposing()
+        restructured {
+            edit(at, at, text, Selection(if (replacesLine) at else at + 1), now, mergeable = false, fromInput = false) {
+                for (k in 0 until cells) document.setParagraphStyle(first + k, ParagraphStyle(cell = TableCell(id, k / columns, k % columns, header = true)))
+                if (lineAfter) document.setParagraphStyle(first + cells, ParagraphStyle.DEFAULT)
+            }
+        }
+    }
+
+    /** A cell of a table being rebuilt: an old cell's paragraph wherever it moves, or a new empty one. */
+    private class NewCell(val from: Int?, val row: Int, val column: Int)
+
+    /** What an old cell holds, to put back wherever it goes. */
+    private class SavedCell(
+        val text: String,
+        val style: ParagraphStyle,
+        val charStyles: List<Triple<CharStyle, Int, Int>>,
+        val values: List<Pair<ValueStyle, IntArray>>,
+    )
+
+    private fun save(p: Int): SavedCell {
+        val a = document.paragraphStart(p)
+        val b = document.paragraphEnd(p)
+        val chars = ArrayList<Triple<CharStyle, Int, Int>>()
+        for (style in CharStyle.entries) {
+            val set = document.styleRanges(style)
+            for (i in 0 until set.count) {
+                val s = maxOf(set.start(i), a)
+                val e = minOf(set.end(i), b)
+                if (s < e) chars += Triple(style, s - a, e - a)
+            }
+        }
+        val values = ArrayList<Pair<ValueStyle, IntArray>>()
+        for (style in ValueStyle.entries) {
+            val ranges = document.valueRanges(style)
+            for (i in 0 until ranges.count) {
+                val s = maxOf(ranges.start(i), a)
+                val e = minOf(ranges.end(i), b)
+                if (s < e) values += style to intArrayOf(s - a, e - a, ranges.value(i))
+            }
+        }
+        return SavedCell(document.substring(a, b), document.paragraphStyle(p), chars, values)
+    }
+
+    /**
+     * Rebuilds the table that paragraph [p] is in as [cells], in one undo step: each old cell
+     * keeps its text and formatting wherever it goes. The caret goes to the end of new cell
+     * [caretCell]. A table left with no cells is taken away.
+     */
+    private fun rebuildTable(p: Int, cells: List<NewCell>, caretCell: Int, now: Long, header: Boolean? = null) {
+        val range = layout.tableRange(p)
+        if (cells.isEmpty()) {
+            deleteTable(now)
+            return
+        }
+        val id = cellOf(range.first)!!.table
+        val keepsHeader = header ?: cellOf(range.first)!!.header
+        val saved = range.associateWith { save(it) }
+        val start = document.paragraphStart(range.first)
+        val end = document.paragraphEnd(range.last)
+        val texts = cells.map { c -> c.from?.let { saved.getValue(it).text } ?: "" }
+        val text = texts.joinToString("\n")
+        var caret = start
+        for (k in 0..caretCell.coerceIn(0, cells.size - 1)) caret += texts[k].length + if (k < caretCell) 1 else 0
+        clearComposing()
+        restructured {
+            edit(start, end, text, Selection(caret), now, mergeable = false, fromInput = false) {
+                for (style in CharStyle.entries) document.setStyle(style, false, start, start + text.length)
+                for (style in ValueStyle.entries) document.setValue(style, null, start, start + text.length)
+                var at = start
+                for ((k, c) in cells.withIndex()) {
+                    val old = c.from?.let { saved.getValue(it) }
+                    if (old != null) {
+                        for ((style, a, b) in old.charStyles) document.setStyle(style, true, at + a, at + b)
+                        for ((style, v) in old.values) document.setValue(style, v[2], at + v[0], at + v[1])
+                    }
+                    val base = old?.style ?: ParagraphStyle.DEFAULT
+                    document.setParagraphStyle(range.first + k, base.copy(cell = TableCell(id, c.row, c.column, keepsHeader)))
+                    at += texts[k].length + 1
+                }
+            }
+        }
+    }
+
+    /** The table the caret is in as rows of its paragraphs, and the caret's row and column. */
+    private fun grid(): Triple<List<List<Int>>, Int, Int>? {
+        val p = document.paragraphAt(selection.focus)
+        val cell = cellOf(p) ?: return null
+        val rows = layout.tableRange(p).groupBy { cellOf(it)!!.row }.values.toList()
+        val row = rows.indexOfFirst { p in it }
+        return Triple(rows, row, rows[row].indexOf(p).coerceAtLeast(0).let { minOf(it, cell.column) })
+    }
+
+    /** As many columns as the table's widest row: rows left short are filled with empty cells. */
+    private fun columnsOf(rows: List<List<Int>>): Int = rows.maxOf { r -> r.maxOf { cellOf(it)!!.column } + 1 }
+
+    private fun rebuilt(rows: List<List<Int?>>): List<NewCell> =
+        rows.flatMapIndexed { r, row -> row.mapIndexed { c, from -> NewCell(from, r, c) } }
+
+    private fun cellsOf(rows: List<List<Int>>, columns: Int): List<MutableList<Int?>> = rows.map { row ->
+        MutableList(columns) { c -> row.firstOrNull { cellOf(it)!!.column == c } }
+    }
+
+    /** A row of empty cells above or below the caret's, the caret in it. */
+    fun addRow(below: Boolean, now: Long) {
+        val (rows, row, column) = grid() ?: return
+        val columns = columnsOf(rows)
+        val grid = cellsOf(rows, columns).toMutableList<List<Int?>>()
+        val at = if (below) row + 1 else row
+        grid.add(at, List(columns) { null })
+        rebuildTable(rows[0][0], rebuilt(grid), at * columns + column, now)
+    }
+
+    /** A column of empty cells left or right of the caret's, the caret in it. */
+    fun addColumn(right: Boolean, now: Long) {
+        val (rows, row, column) = grid() ?: return
+        val columns = columnsOf(rows)
+        val at = if (right) column + 1 else column
+        val grid = cellsOf(rows, columns).map { it.apply { add(at, null) } }
+        rebuildTable(rows[0][0], rebuilt(grid), row * (columns + 1) + at, now)
+    }
+
+    /** Takes away the caret's row; the last row taken takes the table. */
+    fun deleteRow(now: Long) {
+        val (rows, row, column) = grid() ?: return
+        if (rows.size == 1) return deleteTable(now)
+        val columns = columnsOf(rows)
+        val grid = cellsOf(rows, columns).toMutableList<List<Int?>>()
+        grid.removeAt(row)
+        rebuildTable(rows[0][0], rebuilt(grid), minOf(row, grid.size - 1) * columns + column, now)
+    }
+
+    /** Takes away the caret's column; the last column taken takes the table. */
+    fun deleteColumn(now: Long) {
+        val (rows, row, column) = grid() ?: return
+        val columns = columnsOf(rows)
+        if (columns == 1) return deleteTable(now)
+        val grid = cellsOf(rows, columns).map { it.apply { removeAt(column) } }
+        rebuildTable(rows[0][0], rebuilt(grid), row * (columns - 1) + minOf(column, columns - 2), now)
+    }
+
+    /** The table's first row as its header, shaded and bold, or as a row like the others. */
+    fun toggleHeaderRow(now: Long) {
+        val p = document.paragraphAt(selection.focus)
+        val cell = cellOf(p) ?: return
+        val range = layout.tableRange(p)
+        formatEdit(now) {
+            for (q in range) {
+                val s = document.paragraphStyle(q)
+                document.setParagraphStyle(q, s.copy(cell = s.cell!!.copy(header = !cell.header)))
+            }
+        }
+    }
+
+    /** Takes away the table the caret is in, with its line; the caret goes where it was. */
+    fun deleteTable(now: Long) {
+        val p = document.paragraphAt(selection.focus)
+        if (cellOf(p) == null || !editable) return
+        val range = layout.tableRange(p)
+        val start = document.paragraphStart(range.first)
+        val end = document.paragraphEnd(range.last)
+        clearComposing()
+        restructured {
+            when {
+                // The line after it moves up into its place, keeping its own style.
+                range.last + 1 < document.paragraphCount -> {
+                    val next = document.paragraphStyle(range.last + 1)
+                    edit(start, end + 1, "", Selection(start), now, mergeable = false, fromInput = false) {
+                        document.setParagraphStyle(range.first, next)
+                    }
+                }
+                range.first > 0 -> edit(start - 1, end, "", Selection(start - 1), now, mergeable = false, fromInput = false)
+                else -> edit(start, end, "", Selection(start), now, mergeable = false, fromInput = false) {
+                    document.setParagraphStyle(0, ParagraphStyle.DEFAULT)
+                }
+            }
+        }
     }
 
     // --- Pictures and dividers --------------------------------------------------------------
@@ -1108,7 +1518,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                 }
             }
             Key.ENTER -> type("\n", now)
-            Key.TAB -> type("\t", now)
+            Key.TAB -> if (!nextCell(backward = shift, now)) type("\t", now)
             Key.UNDO -> undo(now)
             Key.REDO -> redo(now)
             Key.SELECT_ALL -> select(Selection(0, document.length), now)
@@ -1164,6 +1574,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     }
 
     private fun moveVertically(key: Key, shift: Boolean, now: Long) {
+        if (key == Key.DOWN && !shift && selection.isCollapsed && leaveTableAtEnd(now)) return
         if (key == Key.DOWN && !shift && selection.isCollapsed &&
             layout.lineBounds(selection.focus, selection.upstream).last == document.length && leaveCodeAtEnd(now)
         ) return
@@ -1176,15 +1587,20 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val focus = selection.focus
         val line = layout.lineBounds(focus, selection.upstream)
         val p = document.paragraphAt(focus)
+        // In a table the line below a cell's last is the row below's, not the next cell's, which
+        // is beside it; above, the bottom of the row above, so the caret lands on a cell's last line.
+        val below = layout.rowRange(p).last + 1
+        val above = layout.rowRange(p).first - 1
         val y = when (key) {
             Key.DOWN -> when {
                 line.last < document.paragraphEnd(p) -> middle(layout.caretRect(line.last, false))
-                p + 1 < document.paragraphCount -> middle(layout.caretRect(document.paragraphStart(p + 1), false))
+                below < document.paragraphCount -> middle(layout.caretRect(document.paragraphStart(below), false))
                 else -> layout.height
             }
             Key.UP -> when {
                 line.first > document.paragraphStart(p) -> middle(layout.caretRect(line.first, true))
-                p > 0 -> middle(layout.caretRect(document.paragraphEnd(p - 1), false))
+                above >= 0 && document.paragraphStyle(above).cell != null -> layout.paragraphTop(above) + layout.boxHeight(above) - 1f
+                above >= 0 -> middle(layout.caretRect(document.paragraphEnd(above), false))
                 else -> -1f
             }
             Key.PAGE_UP -> middle(r) - (viewHeight - insetTop - insetBottom)
@@ -1595,6 +2011,8 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     private var glyphXs = FloatArray(256)
     private var glyphYs = FloatArray(256)
     private val path = PathBuilder()
+    /** Where the paragraph being painted starts across: the text area's left, or its cell's column. */
+    private var paintX = 0f
 
     fun render(list: DrawList, now: Long) {
         list.reset()
@@ -1606,7 +2024,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             val top = originY + layout.paragraphTop(p)
             if (top > viewHeight) break
             val pl = layout.paragraph(p)
-            if (top + pl.height < 0) continue
+            if (top + layout.boxHeight(p) < 0) continue
             renderParagraph(list, p, pl, top)
         }
 
@@ -1633,7 +2051,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
      * selected, the selection's colour lies over it, see-through.
      */
     private fun drawPicture(list: DrawList, handle: Int, pl: ParagraphLayout, top: Float, base: Int) {
-        val x = originX + pl.glyphX(0, 0)
+        val x = paintX + pl.glyphX(0, 0)
         val y = top + pl.lineTop(0) + pl.objectTop
         val w = pl.objectWidth
         val h = pl.objectHeight
@@ -1662,7 +2080,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
             val edge = style.findEdge
             var k = 0
             while (k < spans.size) {
-                val x = originX + spans[k]
+                val x = paintX + spans[k]
                 val w = spans[k + 1] - spans[k]
                 list.rect(x, lineTop, w, lineHeight, style.findEdgeColor)
                 list.rect(x + edge, lineTop + edge, w - 2 * edge, lineHeight - 2 * edge, color)
@@ -1679,13 +2097,14 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
         val pstyle = document.paragraphStyle(p)
         // A ticked checklist item is struck through and faded, as in Samsung Notes.
         val done = pstyle.list == ListType.CHECKBOX && pstyle.checked
+        paintX = originX + layout.paragraphLeft(p)
         drawBlock(list, p, pstyle, pl, top)
         if (pstyle.role == Role.DIVIDER) return
         if (pl.objectHeight > 0f) {
             drawPicture(list, pstyle.picture, pl, top, base)
             return
         }
-        drawListMarker(list, p, pstyle, originX + markerLeft(pl), top + pl.baseline(0), runs.sizes[0], pl.rtl)
+        drawListMarker(list, p, pstyle, paintX + markerLeft(pl), top + pl.baseline(0), runs.sizes[0], pl.rtl)
 
         var g = 0
         for (line in 0 until pl.lineCount) {
@@ -1731,7 +2150,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                     val spans = pl.spans(line, maxOf(s, ls), minOf(e, le))
                     var k = 0
                     while (k < spans.size) {
-                        list.rect(originX + spans[k], lineTop, spans[k + 1] - spans[k], lineHeight, style.selectionColor)
+                        list.rect(paintX + spans[k], lineTop, spans[k + 1] - spans[k], lineHeight, style.selectionColor)
                         k += 2
                     }
                     // A selection running on past the paragraph shows a little of its end, on
@@ -1739,7 +2158,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                     if (lastLine && e > le) {
                         val w = style.textSize * 0.3f
                         val x = if (pl.rtl) pl.lineLeft(line) - w else pl.lineRight(line)
-                        list.rect(originX + x, lineTop, w, lineHeight, style.selectionColor)
+                        list.rect(paintX + x, lineTop, w, lineHeight, style.selectionColor)
                     }
                 }
             }
@@ -1764,7 +2183,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                     runColor = color
                     if (n == glyphIds.size) growGlyphScratch()
                     glyphIds[n] = pl.glyphs[g]
-                    glyphXs[n] = originX + pl.glyphX(g, line)
+                    glyphXs[n] = paintX + pl.glyphX(g, line)
                     glyphYs[n] = top + pl.glyphBaselineY(g, line)
                     n++
                 }
@@ -1793,7 +2212,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                     val spans = pl.spans(line, maxOf(s, ls), minOf(e, le))
                     var k = 0
                     while (k < spans.size) {
-                        list.rect(originX + spans[k], y, spans[k + 1] - spans[k], style.composingUnderline, style.textColor)
+                        list.rect(paintX + spans[k], y, spans[k + 1] - spans[k], style.composingUnderline, style.textColor)
                         k += 2
                     }
                 }
@@ -1816,7 +2235,7 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                 val spans = pl.spans(line, a, b)
                 var k = 0
                 while (k < spans.size) {
-                    block(r, originX + spans[k], originX + spans[k + 1])
+                    block(r, paintX + spans[k], paintX + spans[k + 1])
                     k += 2
                 }
             }
@@ -1862,11 +2281,11 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
     private fun drawBlock(list: DrawList, p: Int, ps: ParagraphStyle, pl: ParagraphLayout, top: Float) {
         when (ps.role) {
             Role.QUOTE -> if (style.quoteBarWidth > 0f) {
-                val x = if (pl.rtl) originX + pl.rightEdge + style.quoteIndent - style.quoteBarWidth else originX + pl.textLeft - style.quoteIndent
+                val x = if (pl.rtl) paintX + pl.rightEdge + style.quoteIndent - style.quoteBarWidth else paintX + pl.textLeft - style.quoteIndent
                 list.rect(x, top, style.quoteBarWidth, pl.height, style.quoteBarColor)
             }
             Role.CODE_BLOCK -> {
-                val left = originX + pl.textLeft - style.codeIndent
+                val left = paintX + pl.textLeft - style.codeIndent
                 val right = originX + layout.width
                 val roundTop = p == 0 || document.paragraphStyle(p - 1).role != Role.CODE_BLOCK
                 val roundBottom = p + 1 >= document.paragraphCount || document.paragraphStyle(p + 1).role != Role.CODE_BLOCK
@@ -1896,8 +2315,30 @@ class Composer(fonts: FontFamily, val style: EditorStyle, private val host: Comp
                 val y = top + pl.height / 2 - style.dividerThickness / 2
                 list.rect(originX + pl.textLeft, y, layout.width - pl.textLeft, style.dividerThickness, style.dividerColor)
             }
-            else -> {}
+            else -> ps.cell?.let { drawCell(list, p, it, top) }
         }
+    }
+
+    /**
+     * A table cell's box: its shade when it is in the header row, and its lines. Each cell
+     * draws the line on its right and below it, and the first row and column the table's top
+     * and left edges, so no line is drawn twice, which would show where see-through ones cross.
+     */
+    private fun drawCell(list: DrawList, p: Int, cell: TableCell, top: Float) {
+        val x = Math.round(paintX).toFloat()
+        val y = Math.round(top).toFloat()
+        val w = layout.boxWidth(p)
+        val h = Math.round(top + layout.boxHeight(p)).toFloat() - y
+        val t = style.tableLineWidth
+        if (cell.header && cell.row == 0 && style.tableHeaderColor != 0) list.rect(x, y, w, h, style.tableHeaderColor)
+        if (t <= 0f) return
+        val color = style.tableLineColor
+        val firstRow = cell.row == 0
+        val below = if (firstRow) t else 0f
+        if (firstRow) list.rect(x, y, w + t, t, color)
+        if (cell.column == 0) list.rect(x, y + below, t, h - below, color)
+        list.rect(x + w, y + below, t, h - below, color)
+        list.rect(x, y + h, w + t, t, color)
     }
 
     /**

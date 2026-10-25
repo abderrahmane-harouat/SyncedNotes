@@ -111,6 +111,44 @@ public  final class Table extends
     rows_.remove(index);
   }
 
+  public static final int HEADER_ROW_FIELD_NUMBER = 2;
+  private boolean headerRow_;
+  /**
+   * <pre>
+   * Whether the first row is the table's header: shaded and bold, as a web page's &lt;th&gt; row.
+   * </pre>
+   *
+   * <code>bool header_row = 2;</code>
+   * @return The headerRow.
+   */
+  @java.lang.Override
+  public boolean getHeaderRow() {
+    return headerRow_;
+  }
+  /**
+   * <pre>
+   * Whether the first row is the table's header: shaded and bold, as a web page's &lt;th&gt; row.
+   * </pre>
+   *
+   * <code>bool header_row = 2;</code>
+   * @param value The headerRow to set.
+   */
+  private void setHeaderRow(boolean value) {
+    
+    headerRow_ = value;
+  }
+  /**
+   * <pre>
+   * Whether the first row is the table's header: shaded and bold, as a web page's &lt;th&gt; row.
+   * </pre>
+   *
+   * <code>bool header_row = 2;</code>
+   */
+  private void clearHeaderRow() {
+
+    headerRow_ = false;
+  }
+
   public static syncednotes.note.v1.Table parseFrom(
       java.nio.ByteBuffer data)
       throws com.google.protobuf.InvalidProtocolBufferException {
@@ -310,6 +348,46 @@ public  final class Table extends
       return this;
     }
 
+    /**
+     * <pre>
+     * Whether the first row is the table's header: shaded and bold, as a web page's &lt;th&gt; row.
+     * </pre>
+     *
+     * <code>bool header_row = 2;</code>
+     * @return The headerRow.
+     */
+    @java.lang.Override
+    public boolean getHeaderRow() {
+      return instance.getHeaderRow();
+    }
+    /**
+     * <pre>
+     * Whether the first row is the table's header: shaded and bold, as a web page's &lt;th&gt; row.
+     * </pre>
+     *
+     * <code>bool header_row = 2;</code>
+     * @param value The headerRow to set.
+     * @return This builder for chaining.
+     */
+    public Builder setHeaderRow(boolean value) {
+      copyOnWrite();
+      instance.setHeaderRow(value);
+      return this;
+    }
+    /**
+     * <pre>
+     * Whether the first row is the table's header: shaded and bold, as a web page's &lt;th&gt; row.
+     * </pre>
+     *
+     * <code>bool header_row = 2;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearHeaderRow() {
+      copyOnWrite();
+      instance.clearHeaderRow();
+      return this;
+    }
+
     // @@protoc_insertion_point(builder_scope:syncednotes.note.v1.Table)
   }
   @java.lang.Override
@@ -328,9 +406,11 @@ public  final class Table extends
           java.lang.Object[] objects = new java.lang.Object[] {
             "rows_",
             syncednotes.note.v1.Row.class,
+            "headerRow_",
           };
           java.lang.String info =
-              "\u0000\u0001\u0000\u0000\u0001\u0001\u0001\u0000\u0001\u0000\u0001\u001b";
+              "\u0000\u0002\u0000\u0000\u0001\u0002\u0002\u0000\u0001\u0000\u0001\u001b\u0002\u0007" +
+              "";
           return newMessageInfo(DEFAULT_INSTANCE, info, objects);
       }
       case GET_DEFAULT_INSTANCE: {

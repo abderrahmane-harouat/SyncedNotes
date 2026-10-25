@@ -166,7 +166,8 @@ class AgentServer(
         private const val INSTRUCTIONS =
             "These are the notes of one folder of SyncedNotes, shared with you by its owner; no other note is visible. " +
                 "Notes are read and written as Markdown, a line per paragraph: # title, ## heading, ### subheading, lists, " +
-                "- [ ] checklists, > quotes, ```c or ```cpp fenced code, --- dividers, **bold**, *italic*, ~~strikethrough~~, `code`. " +
+                "- [ ] checklists, > quotes, ```c or ```cpp fenced code, --- dividers, **bold**, *italic*, ~~strikethrough~~, `code`, " +
+                "and tables as GitHub writes them: | a | b | then | --- | --- | under the header row, a cell's own | written \\|. " +
                 "A callout, text on a coloured panel, is a quote whose first line names its colour: > [!NOTE] blue, > [!TIP] green, " +
                 "> [!WARNING] orange, > [!IMPORTANT] purple, > [!CAUTION] pink, > [!GRAY] gray; each line after it starts with > . " +
                 "To change part of a note, prefer replace_in_note: it keeps the formatting Markdown cannot show (colours, " +

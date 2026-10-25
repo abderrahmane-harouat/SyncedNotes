@@ -35,6 +35,30 @@ class MarkdownWriterTest {
     }
 
     @Test
+    fun aTableIsWrittenAsMarkdownsAndReadBackTheSame() {
+        val markdown = """
+            Rooms:
+
+            | Room | Seats |
+            | --- | --- |
+            | `lab/` | **12** |
+            | a \| b |  |
+
+            after
+        """.trimIndent()
+        val d = document(markdown)
+        assertEquals(listOf("Room", "Seats", "lab/", "12", "a | b", ""), (2..7).map { d.substring(d.paragraphStart(it), d.paragraphEnd(it)) })
+        assertEquals(markdown, MarkdownWriter.write(d))
+    }
+
+    @Test
+    fun aTableAppendedRightAfterAnotherIsATableOfItsOwn() {
+        val d = document("| a |\n| --- |\n| b |")
+        d.appendFragment(MarkdownReader.read("| c |\n| --- |"))
+        assertEquals(listOf(1, 1, 2), (0..2).map { d.paragraphStyle(it).cell!!.table })
+    }
+
+    @Test
     fun theNotesStructureIsWhatTheMarkdownSaid() {
         val d = document("## Steps\n1. Build\n```c\nint x;\n```")
         assertEquals(Role.HEADING, d.paragraphStyle(0).role)

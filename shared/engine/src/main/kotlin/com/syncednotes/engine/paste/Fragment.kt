@@ -103,8 +103,9 @@ internal class FragmentBuilder {
 
     fun build(): Fragment {
         if (text.isNotEmpty()) finish()
-        // Empty lines at either end are the page's spacing around what was copied.
-        fun blank(p: Piece) = p.text.isEmpty() && p.style.role != Role.CODE_BLOCK
+        // Empty lines at either end are the page's spacing around what was copied; an empty
+        // cell is part of its table.
+        fun blank(p: Piece) = p.text.isEmpty() && p.style.role != Role.CODE_BLOCK && p.style.cell == null
         while (pieces.isNotEmpty() && blank(pieces.last())) pieces.removeAt(pieces.lastIndex)
         while (pieces.isNotEmpty() && blank(pieces.first())) pieces.removeAt(0)
         return Fragment(pieces.toList())

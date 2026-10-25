@@ -15,12 +15,15 @@ Until these are done, the Swift app stays in the repo and on the Mac.
   and justified lines.
 - [x] **Pictures** in the engine: inserted on both devices, shown at their size, kept whole
   when deleting or typing beside them, and synced.
-- [ ] A picture amid text on a line (the Swift app could make one), and **tables**; notes
-  holding either still open read-only.
+- [x] **Tables**, as Notion draws them, on both: inserted from the toolbar, rows and columns
+  added and taken away, a header row, Tab and Return between cells; pasted from web pages,
+  Notion, VS Code and Markdown, and synced. The AI agent reads and writes them as Markdown.
+- [ ] A picture amid text on a line (the Swift app could make one); a note holding one still
+  opens read-only.
 - [ ] Copying and pasting a picture; resizing one.
 - [x] **Rich paste** from web pages, Notion and Markdown (the Copy buttons of Claude and
   ChatGPT): headings, lists, checklists, quotes, code with its language, dividers, bold,
-  italic, underline, strikethrough, inline code, tables as lines.
+  italic, underline, strikethrough, inline code, tables.
 - [ ] **Rich copy** between notes, keeping formatting; plain text today, and none on the phone.
 - [ ] Lists that start as you type: `- `, `* ` or `1. ` at the start of a line.
 - [ ] An Edit menu that acts on the note or the field that has focus.
@@ -59,7 +62,8 @@ Until these are done, the Swift app stays in the repo and on the Mac.
 - [ ] Pinned notes, and a choice of sort order (edited, created, title).
 - [x] Insert a picture: a file on the Mac, the photo picker on the phone.
 - [ ] Files that are not pictures, kept locked like pictures.
-- [ ] Tables: column widths, selecting and moving rows and columns.
+- [ ] Tables: column widths set by hand, a table wider than the note scrolling across, moving
+  rows and columns.
 - [ ] A heading made not bold keeps that when saved (today a heading's weight is part of the
   heading).
 - [ ] List markers drawn by the app for right-to-left items too.

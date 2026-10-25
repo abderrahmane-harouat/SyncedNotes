@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Drawn for this app, in the panel icons' manner: a table's frame, its header row ruled off. -->
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp" android:height="24dp" android:viewportWidth="24" android:viewportHeight="24"
+    android:autoMirrored="false">
+    <path android:pathData="M6,5H18A2,2 0,0 1,20 7V17A2,2 0,0 1,18 19H6A2,2 0,0 1,4 17V7A2,2 0,0 1,6 5ZM4,10H20M4,14.5H20M9.5,10V19M14.5,10V19"
+        android:strokeColor="#FF4C4C4C" android:strokeWidth="1.5"
+        android:strokeLineCap="round" android:strokeLineJoin="round" android:fillColor="#00000000" />
+</vector>

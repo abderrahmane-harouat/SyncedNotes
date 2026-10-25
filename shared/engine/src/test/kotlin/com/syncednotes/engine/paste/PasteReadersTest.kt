@@ -4,6 +4,7 @@ import com.syncednotes.engine.text.CharStyle
 import com.syncednotes.engine.text.CodeLanguage
 import com.syncednotes.engine.text.ListKind
 import com.syncednotes.engine.text.Role
+import com.syncednotes.engine.text.TableCell
 import kotlin.test.Test
 import kotlin.test.assertEquals
 import kotlin.test.assertFalse
@@ -18,6 +19,7 @@ class PasteReadersTest {
     private fun Fragment.lines() = paragraphs.map { it.text }
     private fun Fragment.roles() = paragraphs.map { it.style.role }
     private fun Piece.styled(style: CharStyle) = spans.filter { it.style == style }.map { text.substring(it.start, it.end) }
+    private fun Fragment.cells() = paragraphs.map { it.style.cell }
 
     @Test
     fun anAnswerCopiedFromAChatPageKeepsItsHeadingsListsAndCodeInItsLanguage() {
@@ -76,9 +78,47 @@ class PasteReadersTest {
     @Test
     fun quotesDividersTablesAndEntitiesAreRead() {
         val f = HtmlReader.read("<blockquote><p>Less &amp; more</p></blockquote><hr><table><tr><th>Name</th><th>Age</th></tr><tr><td><p>Ann</p></td><td>30</td></tr></table>")
-        assertEquals(listOf("Less & more", "￼", "Name | Age", "Ann | 30"), f.lines())
-        assertEquals(listOf(Role.QUOTE, Role.DIVIDER, Role.BODY, Role.BODY), f.roles())
-        assertEquals(listOf("Name", "Age"), f.paragraphs[2].styled(CharStyle.BOLD))
+        assertEquals(listOf("Less & more", "￼", "Name", "Age", "Ann", "30"), f.lines())
+        assertEquals(listOf(Role.QUOTE, Role.DIVIDER, Role.BODY, Role.BODY, Role.BODY, Role.BODY), f.roles())
+        assertEquals(listOf(null, null, TableCell(1, 0, 0, true), TableCell(1, 0, 1, true), TableCell(1, 1, 0, true), TableCell(1, 1, 1, true)), f.cells())
+        // The header row is bold by being the header, not by a style of its text.
+        assertEquals(emptyList(), f.paragraphs[2].styled(CharStyle.BOLD))
+    }
+
+    @Test
+    fun aTableCopiedFromAnEditorIsATableWithItsHeaderAndTheFormattingOfItsCells() {
+        // The shape VS Code and the Claude Code panel copy a rendered Markdown table in.
+        val html = """
+            <meta charset='utf-8'><p style="white-space: pre-wrap; color: rgb(204, 204, 204); background-color: rgb(31, 31, 31);">Made-up rooms, by <strong>floor</strong>:</p><table style="border-collapse: collapse; background-color: rgb(31, 31, 31);"><thead><tr><th style="padding: 2px;">Room</th><th style="padding: 2px;">Seats</th><th style="padding: 2px;">What it is for</th></tr></thead><tbody><tr><td style="padding: 2px;"><code>lab/</code></td><td style="padding: 2px;">12</td><td style="padding: 2px;">Trying <strong>new</strong> things</td></tr><tr><td style="padding: 2px;">hall</td><td style="padding: 2px;">300</td><td style="padding: 2px;"></td></tr></tbody></table><h3>After the table</h3>
+        """.trimIndent()
+        val f = HtmlReader.read(html)
+        assertEquals(
+            listOf("Made-up rooms, by floor:", "", "Room", "Seats", "What it is for", "lab/", "12", "Trying new things", "hall", "300", "", "", "After the table"),
+            f.lines(),
+        )
+        assertEquals((0 until 9).map { TableCell(1, it / 3, it % 3, header = true) }, f.cells().subList(2, 11))
+        assertEquals(listOf("lab/"), f.paragraphs[5].styled(CharStyle.CODE))
+        assertEquals(listOf("new"), f.paragraphs[7].styled(CharStyle.BOLD))
+        assertEquals(Role.SUBHEADING, f.paragraphs[12].style.role)
+        assertEquals(null, f.paragraphs[12].style.cell)
+    }
+
+    @Test
+    fun aRowShortOfCellsIsFilledOutAndACellSpanningColumnsKeepsTheRestInPlace() {
+        val f = HtmlReader.read("<table><tr><td colspan=\"2\">wide</td><td>c</td></tr><tr><td>a</td></tr></table>")
+        assertEquals(listOf("wide", "", "c", "a", "", ""), f.lines())
+        assertEquals(listOf(0, 1, 2, 0, 1, 2), f.cells().map { it!!.column })
+        assertEquals(false, f.cells()[0]!!.header)
+    }
+
+    @Test
+    fun aMarkdownTableIsATableAndABarInCodeOrEscapedStaysInItsCell() {
+        val f = MarkdownReader.read("| Name | Pipe |\n|---|:---:|\n| `a|b` | x \\| y |\n| **bold** |\n\nafter")
+        assertEquals(listOf("Name", "Pipe", "a|b", "x | y", "bold", "", "", "after"), f.lines())
+        assertEquals(listOf(true, true), f.cells().take(2).map { it!!.header })
+        assertEquals(listOf(2, 2), f.cells().subList(4, 6).map { it!!.row })
+        assertEquals(listOf("bold"), f.paragraphs[4].styled(CharStyle.BOLD))
+        assertEquals(listOf("a|b"), f.paragraphs[2].styled(CharStyle.CODE))
     }
 
     @Test
@@ -120,7 +160,7 @@ class PasteReadersTest {
         assertEquals(
             listOf(
                 "Plan", "Some bold and italic and code and a link.", "", "First", "Second", "nested", "done", "not yet", "",
-                "quoted", "", "int x = 1;", "￼", "a | b", "1 | 2",
+                "quoted", "", "int x = 1;", "￼", "a", "b", "1", "2",
             ),
             f.lines(),
         )
@@ -136,7 +176,9 @@ class PasteReadersTest {
         assertEquals(Role.QUOTE, f.paragraphs[9].style.role)
         assertEquals(CodeLanguage.C, f.paragraphs[11].style.language)
         assertEquals(Role.DIVIDER, f.paragraphs[12].style.role)
-        assertEquals(listOf("a", "b"), f.paragraphs[13].styled(CharStyle.BOLD))
+        // A table's header row is bold by being the header, not by a style of its text.
+        assertEquals(listOf(true, true), listOf(f.paragraphs[13].style.cell!!.header, f.paragraphs[14].style.cell!!.header))
+        assertEquals(emptyList(), f.paragraphs[13].styled(CharStyle.BOLD))
     }
 
     @Test

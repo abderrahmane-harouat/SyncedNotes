@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Samsung's Text options card, 300dp wide with a 60dp title row and rows of 40dp groups, given
      every tool the Mac's Format menu has: paragraph styles, the four lists, alignment with
-     justify, character styles, indent, quote, code, divider and line spacing. The outer padding
+     justify, character styles, indent, quote, code, divider, tables and line spacing. The outer padding
      leaves room for the card's shadow inside the popup window. -->
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="wrap_content"
@@ -101,7 +101,7 @@
 
         <LinearLayout android:layout_width="260dp" android:layout_height="40dp" android:layout_gravity="center_horizontal"
             android:layout_marginTop="8dp" android:orientation="horizontal" android:layoutDirection="ltr">
-            <LinearLayout style="@style/PanelGroup" android:layout_width="160dp">
+            <LinearLayout style="@style/PanelGroup" android:layout_width="174dp">
                 <ImageButton android:id="@+id/quote" style="@style/PanelButton" android:src="@drawable/ic_quote" android:contentDescription="@string/quote" />
                 <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
                 <ImageButton android:id="@+id/code_block" style="@style/PanelButton" android:src="@drawable/ic_code_block" android:contentDescription="@string/code_block" />
@@ -109,9 +109,11 @@
                 <ImageButton android:id="@+id/inline_code" style="@style/PanelButton" android:src="@drawable/ic_inline_code" android:contentDescription="@string/inline_code" />
                 <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
                 <ImageButton android:id="@+id/divider" style="@style/PanelButton" android:src="@drawable/ic_divider" android:contentDescription="@string/divider" />
+                <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
+                <ImageButton android:id="@+id/table" style="@style/PanelButton" android:src="@drawable/ic_table" android:contentDescription="@string/table" />
             </LinearLayout>
             <Space android:layout_width="0dp" android:layout_height="1dp" android:layout_weight="1" />
-            <LinearLayout android:id="@+id/line_spacing" style="@style/PanelGroup" android:layout_width="92dp"
+            <LinearLayout android:id="@+id/line_spacing" style="@style/PanelGroup" android:layout_width="82dp"
                 android:background="@drawable/panel_group_background" android:contentDescription="@string/line_spacing">
                 <ImageView android:layout_width="24dp" android:layout_height="24dp" android:src="@drawable/ic_line_spacing"
                     android:tint="@color/icon_tint" android:importantForAccessibility="no" />

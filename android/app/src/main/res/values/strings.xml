@@ -31,6 +31,16 @@
     <string name="callout">Callout</string>
     <string name="inline_code">Inline code</string>
     <string name="divider">Insert divider</string>
+    <string name="table">Table</string>
+    <string name="insert_table">Insert table</string>
+    <string name="add_row_above">Add row above</string>
+    <string name="add_row_below">Add row below</string>
+    <string name="add_column_left">Add column left</string>
+    <string name="add_column_right">Add column right</string>
+    <string name="header_row">Header row</string>
+    <string name="delete_row">Delete row</string>
+    <string name="delete_column">Delete column</string>
+    <string name="delete_table">Delete table</string>
     <string name="line_spacing">Line spacing</string>
     <string name="reading_mode">Reading mode</string>
 </resources>

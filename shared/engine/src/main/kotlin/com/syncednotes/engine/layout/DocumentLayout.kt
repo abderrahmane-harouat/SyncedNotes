@@ -11,6 +11,7 @@ import com.syncednotes.engine.text.Bidi
 import com.syncednotes.engine.text.CharStyle
 import com.syncednotes.engine.text.ParagraphStyle
 import com.syncednotes.engine.text.Role
+import com.syncednotes.engine.text.TableCell
 import com.syncednotes.engine.text.TextChange
 import com.syncednotes.engine.text.TextDocument
 import com.syncednotes.engine.text.ValueStyle
@@ -53,12 +54,24 @@ class DocumentLayout(
     private val calloutIndent: Float = 0f,
     private val calloutTop: Float = 0f,
     private val calloutBottom: Float = 0f,
+    /** A table cell's text's room from its lines, across and down. */
+    private val cellPaddingX: Float = 0f,
+    private val cellPaddingY: Float = 0f,
+    /** Room above a table and below it, apart from the text around. */
+    private val tableMargin: Float = 0f,
+    /** How wide a column is while its text needs less, so a new table does not jump as it fills. */
+    private val columnWidth: Float = 0f,
 ) {
     private val shapers = HashMap<FontStack, Shaper>()
     private val markerRuns = HashMap<Pair<String, Float>, ShapedRun>()
     private val ascentPerPx: Float
     private val descentPerPx: Float
     private var paragraphs = ArrayList<ParagraphLayout?>()
+    /**
+     * Each paragraph shaped, kept apart from its lines: a table's column widens or narrows as
+     * its cells fill, and its cells are then broken into lines again without shaping them again.
+     */
+    private var shapes = ArrayList<Shaped?>()
     /**
      * What each paragraph leaves open for the one below as code (see [LineState]); START for
      * one that is not code. Kept current as the text and formatting change, apart from the
@@ -68,6 +81,10 @@ class DocumentLayout(
      */
     private val exits = ArrayList<LineState>()
     private var tops = FloatArray(1)
+    /** Where each paragraph's box starts across, how wide and how tall it is: a cell's, in its row. */
+    private var lefts = FloatArray(1)
+    private var boxWidths = FloatArray(1)
+    private var boxHeights = FloatArray(1)
     private var topsValid = false
     var width = 0f
         private set
@@ -78,6 +95,7 @@ class DocumentLayout(
         descentPerPx = m.descent
         repeat(document.paragraphCount) {
             paragraphs += null
+            shapes += null
             exits += LineState.START
         }
         relex(0, exits.size - 1)
@@ -85,7 +103,10 @@ class DocumentLayout(
         document.addFormatListener { first, last ->
             // The lines either side too: one that becomes code, or stops being code, moves
             // where a code block begins or ends, and so where its padding goes.
-            for (i in maxOf(0, first - 1)..minOf(last + 1, paragraphs.size - 1)) paragraphs[i] = null
+            for (i in maxOf(0, first - 1)..minOf(last + 1, paragraphs.size - 1)) {
+                paragraphs[i] = null
+                shapes[i] = null
+            }
             relex(first, minOf(last, exits.size - 1))
             topsValid = false
         }
@@ -113,8 +134,14 @@ class DocumentLayout(
     }
 
     private fun onChange(change: TextChange) {
-        repeat(change.paragraphsBefore) { paragraphs.removeAt(change.firstParagraph) }
-        repeat(change.paragraphsAfter) { paragraphs.add(change.firstParagraph, null) }
+        repeat(change.paragraphsBefore) {
+            paragraphs.removeAt(change.firstParagraph)
+            shapes.removeAt(change.firstParagraph)
+        }
+        repeat(change.paragraphsAfter) {
+            paragraphs.add(change.firstParagraph, null)
+            shapes.add(change.firstParagraph, null)
+        }
         // Lines that came or went may have moved where a code block begins or ends.
         if (change.paragraphsBefore != change.paragraphsAfter) {
             if (change.firstParagraph > 0) paragraphs[change.firstParagraph - 1] = null
@@ -143,14 +170,18 @@ class DocumentLayout(
         topsValid = false
     }
 
-    fun paragraph(index: Int): ParagraphLayout {
-        paragraphs[index]?.let { return it }
+    /** One paragraph as the shaper made it, before it is broken into lines. */
+    private class Shaped(val text: String, val run: ShapedRun, val runs: StyleRuns, val levels: ByteArray?, val baseLevel: Int)
+
+    private fun shaped(index: Int): Shaped {
+        shapes[index]?.let { return it }
         val start = document.paragraphStart(index)
         val end = document.paragraphEnd(index)
         val text = document.substring(start, end)
         val style = document.paragraphStyle(index)
         val tokens = highlight(index, text, style)
-        val runs = styleRuns(start, text.length, style.role, tokens)
+        // A table's header row is bold because it is the header, as a heading is.
+        val runs = styleRuns(start, text.length, style.role, tokens, bold = style.cell.let { it != null && it.header && it.row == 0 })
         val baseLevel = Bidi.paragraphLevel(text, style.direction)
         val levels = Bidi.levels(text, baseLevel)
 
@@ -182,27 +213,47 @@ class DocumentLayout(
             }
             r = next
         }
+        return Shaped(text, concatenate(parts), runs, levels, baseLevel).also { shapes[index] = it }
+    }
 
+    fun paragraph(index: Int): ParagraphLayout {
+        paragraphs[index]?.let { return it }
+        // A cell is as wide as its column, which the whole table decides: it is laid out with it.
+        if (document.paragraphStyle(index).cell != null) {
+            topsValid = false
+            ensureTops()
+            return paragraphs[index]!!
+        }
+        return build(index, width).also { paragraphs[index] = it }
+    }
+
+    /** Paragraph [index] broken into lines [maxWidth] wide. */
+    private fun build(index: Int, maxWidth: Float): ParagraphLayout {
+        val shape = shaped(index)
+        val text = shape.text
+        val style = document.paragraphStyle(index)
+        val spacing = lineSpacing * (if (style.lineSpacing > 0f) style.lineSpacing else 1f)
+        if (style.cell != null) {
+            return ParagraphLayout(
+                text, shape.run, shape.runs, maxWidth, ascentPerPx, descentPerPx, spacing, cellPaddingX, style.alignment, cellPaddingX,
+                shape.levels, shape.baseLevel, spaceAbove = cellPaddingY, spaceBelow = cellPaddingY,
+            )
+        }
         val (startMargin, endMargin) = margins(style)
         // A right-to-left paragraph has its indent, list markers and quote bar on the right.
-        val (textLeft, textRight) = if (baseLevel % 2 == 1) endMargin to startMargin else startMargin to endMargin
-        val spacing = lineSpacing * (if (style.lineSpacing > 0f) style.lineSpacing else 1f)
+        val (textLeft, textRight) = if (shape.baseLevel % 2 == 1) endMargin to startMargin else startMargin to endMargin
         if (style.picture != 0 && text == OBJECT_TEXT) {
-            val (w, h) = pictureBox(style.picture, width - textLeft - textRight)
+            val (w, h) = pictureBox(style.picture, maxWidth - textLeft - textRight)
             val run = ShapedRun(1, intArrayOf(-1), intArrayOf(0), intArrayOf(0), floatArrayOf(w), floatArrayOf(0f), floatArrayOf(0f))
-            val layout = ParagraphLayout(
-                text, run, runs, width, ascentPerPx, descentPerPx, spacing, textLeft, style.alignment, textRight, null, 0, objectHeight = h,
+            return ParagraphLayout(
+                text, run, shape.runs, maxWidth, ascentPerPx, descentPerPx, spacing, textLeft, style.alignment, textRight, null, 0, objectHeight = h,
             )
-            paragraphs[index] = layout
-            return layout
         }
         val (above, below) = panelPadding(index, style)
-        val layout = ParagraphLayout(
-            text, concatenate(parts), runs, width, ascentPerPx, descentPerPx, spacing, textLeft, style.alignment, textRight,
-            levels, baseLevel, spaceAbove = above, spaceBelow = below,
+        return ParagraphLayout(
+            text, shape.run, shape.runs, maxWidth, ascentPerPx, descentPerPx, spacing, textLeft, style.alignment, textRight,
+            shape.levels, shape.baseLevel, spaceAbove = above, spaceBelow = below,
         )
-        paragraphs[index] = layout
-        return layout
     }
 
     /**
@@ -265,7 +316,10 @@ class DocumentLayout(
             val changed = exit != exits[p]
             exits[p] = exit
             if (p >= last && !changed) return
-            if (changed && p + 1 < paragraphs.size) paragraphs[p + 1] = null
+            if (changed && p + 1 < paragraphs.size) {
+                paragraphs[p + 1] = null
+                shapes[p + 1] = null
+            }
             p++
         }
     }
@@ -275,10 +329,10 @@ class DocumentLayout(
      * wherever its syntax does. A title or heading is bold throughout and a code block
      * monospaced throughout, because of what it is.
      */
-    private fun styleRuns(start: Int, length: Int, role: Role, tokens: List<Token>?): StyleRuns {
-        val roleFlags = when (role) {
-            Role.TITLE, Role.HEADING, Role.SUBHEADING -> 1 shl CharStyle.BOLD.ordinal
-            Role.CODE_BLOCK -> 1 shl CharStyle.CODE.ordinal
+    private fun styleRuns(start: Int, length: Int, role: Role, tokens: List<Token>?, bold: Boolean = false): StyleRuns {
+        val roleFlags = when {
+            bold || role == Role.TITLE || role == Role.HEADING || role == Role.SUBHEADING -> 1 shl CharStyle.BOLD.ordinal
+            role == Role.CODE_BLOCK -> 1 shl CharStyle.CODE.ordinal
             else -> 0
         }
         val base = basePixels(role)
@@ -376,14 +430,114 @@ class DocumentLayout(
 
     private fun ensureTops() {
         if (topsValid) return
-        if (tops.size < paragraphs.size + 1) tops = FloatArray(paragraphs.size * 2 + 1)
-        var y = 0f
-        for (i in paragraphs.indices) {
-            tops[i] = y
-            y += paragraph(i).height
+        val n = paragraphs.size
+        if (tops.size < n + 1) {
+            tops = FloatArray(n * 2 + 1)
+            lefts = FloatArray(n * 2 + 1)
+            boxWidths = FloatArray(n * 2 + 1)
+            boxHeights = FloatArray(n * 2 + 1)
         }
-        tops[paragraphs.size] = y
+        // Set before the paragraphs are laid out, which may ask where a cell is.
         topsValid = true
+        var y = 0f
+        var i = 0
+        while (i < n) {
+            val cell = document.paragraphStyle(i).cell
+            if (cell == null) {
+                val h = paragraph(i).height
+                tops[i] = y
+                lefts[i] = 0f
+                boxWidths[i] = width
+                boxHeights[i] = h
+                y += h
+                i++
+                continue
+            }
+            var last = i
+            while (last + 1 < n && document.paragraphStyle(last + 1).cell?.table == cell.table) last++
+            y = layoutTable(i, last, y)
+            i = last + 1
+        }
+        tops[n] = y
+    }
+
+    /**
+     * Lays out the table of paragraphs [first]..[last] from [top] down, and returns where it ends.
+     * Its columns are as wide as their text, as a web page's table is, and share out the note's
+     * width when that is not enough; each row is as tall as its tallest cell.
+     */
+    private fun layoutTable(first: Int, last: Int, top: Float): Float {
+        var columns = 0
+        for (k in first..last) columns = maxOf(columns, document.paragraphStyle(k).cell!!.column + 1)
+        val natural = FloatArray(columns)
+        val word = FloatArray(columns)
+        for (k in first..last) {
+            val c = document.paragraphStyle(k).cell!!.column
+            // Any width tells how wide the text is on one line; the one already made will do.
+            val probe = paragraphs[k] ?: build(k, Float.MAX_VALUE / 4)
+            natural[c] = maxOf(natural[c], probe.naturalWidth)
+            word[c] = maxOf(word[c], probe.longestWord)
+        }
+        val widths = columnWidths(natural, word)
+        val left = FloatArray(columns)
+        for (c in 1 until columns) left[c] = left[c - 1] + widths[c - 1]
+
+        var y = top + tableMargin
+        var k = first
+        while (k <= last) {
+            val row = document.paragraphStyle(k).cell!!.row
+            var end = k
+            while (end + 1 <= last && document.paragraphStyle(end + 1).cell!!.row == row) end++
+            var height = 0f
+            for (q in k..end) {
+                val c = document.paragraphStyle(q).cell!!.column
+                val layout = paragraphs[q]?.takeIf { it.maxWidth == widths[c] } ?: build(q, widths[c])
+                paragraphs[q] = layout
+                height = maxOf(height, layout.height)
+            }
+            for (q in k..end) {
+                val c = document.paragraphStyle(q).cell!!.column
+                tops[q] = y
+                lefts[q] = left[c]
+                boxWidths[q] = widths[c]
+                boxHeights[q] = height
+            }
+            y += height
+            k = end + 1
+        }
+        return y + tableMargin
+    }
+
+    /**
+     * Each column's width, in whole pixels so the lines between cells are sharp: what its text
+     * needs, or [columnWidth] while it needs less. When those add up to more than the note's
+     * width, the widest columns give up room first, all held to one width, never below their
+     * longest word; a column narrower than that keeps all it needs, as a browser's table does.
+     */
+    private fun columnWidths(natural: FloatArray, word: FloatArray): FloatArray {
+        val n = natural.size
+        val pad = 2 * cellPaddingX
+        val least = minOf(columnWidth, width / n)
+        // Rounded up, so a column just wide enough for its text is not a pixel short of it.
+        val wanted = FloatArray(n) { kotlin.math.ceil(maxOf(natural[it] + pad, least)) }
+        val floor = FloatArray(n) { minOf(wanted[it], kotlin.math.ceil(maxOf(word[it] + pad, pad + cellPaddingX))) }
+        val widths = when {
+            wanted.sum() <= width -> wanted
+            floor.sum() >= width -> FloatArray(n) { floor[it] * width / floor.sum() }
+            else -> {
+                // The one width the widest columns are held to, found by halving.
+                fun total(cap: Float) = (0 until n).sumOf { maxOf(floor[it], minOf(wanted[it], cap)).toDouble() }.toFloat()
+                var lo = 0f
+                var hi = wanted.max()
+                repeat(40) {
+                    val mid = (lo + hi) / 2
+                    if (total(mid) > width) hi = mid else lo = mid
+                }
+                FloatArray(n) { maxOf(floor[it], minOf(wanted[it], lo)) }
+            }
+        }
+        for (c in 0 until n) widths[c] = kotlin.math.floor(widths[c]).coerceAtLeast(1f)
+        return widths
     }
 
     fun paragraphTop(index: Int): Float {
@@ -391,12 +545,52 @@ class DocumentLayout(
         return tops[index]
     }
 
+    /** Where paragraph [index]'s box starts across, from the text area's left: a cell's column. */
+    fun paragraphLeft(index: Int): Float {
+        ensureTops()
+        return lefts[index]
+    }
+
+    /** How wide paragraph [index]'s box is: the note's width, or a cell's column's. */
+    fun boxWidth(index: Int): Float {
+        ensureTops()
+        return boxWidths[index]
+    }
+
+    /** How tall paragraph [index]'s box is: its own height, or a cell's row's. */
+    fun boxHeight(index: Int): Float {
+        ensureTops()
+        return boxHeights[index]
+    }
+
+    /** The cells of the row cell [index] is in; [index] alone for a paragraph outside a table. */
+    fun rowRange(index: Int): IntRange {
+        val cell = document.paragraphStyle(index).cell ?: return index..index
+        fun same(q: Int) = document.paragraphStyle(q).cell.let { it != null && it.table == cell.table && it.row == cell.row }
+        var a = index
+        while (a > 0 && same(a - 1)) a--
+        var b = index
+        while (b + 1 < document.paragraphCount && same(b + 1)) b++
+        return a..b
+    }
+
+    /** The cells of the table cell [index] is in; [index] alone for a paragraph outside a table. */
+    fun tableRange(index: Int): IntRange {
+        val cell = document.paragraphStyle(index).cell ?: return index..index
+        fun same(q: Int) = document.paragraphStyle(q).cell?.table == cell.table
+        var a = index
+        while (a > 0 && same(a - 1)) a--
+        var b = index
+        while (b + 1 < document.paragraphCount && same(b + 1)) b++
+        return a..b
+    }
+
     val height: Float get() {
         ensureTops()
         return tops[paragraphs.size]
     }
 
-    /** The paragraph under document y, clamped to the first and last. */
+    /** The paragraph under document y, clamped to the first and last; a row's first cell for a table's. */
     fun paragraphAtY(y: Float): Int {
         ensureTops()
         var lo = 0
@@ -405,7 +599,7 @@ class DocumentLayout(
             val mid = (lo + hi + 1) ushr 1
             if (tops[mid] <= y) lo = mid else hi = mid - 1
         }
-        return lo
+        return rowRange(lo).first
     }
 
     fun caretRect(offset: Int, upstream: Boolean = false): CaretRect {
@@ -416,17 +610,19 @@ class DocumentLayout(
         val top = paragraphTop(p) + layout.lineTop(line)
         val size = layout.sizeAtCaret(local)
         return CaretRect(
-            layout.xOf(local, line), top, top + layout.lineHeight(line), top + layout.baseline(line),
+            paragraphLeft(p) + layout.xOf(local, line), top, top + layout.lineHeight(line), top + layout.baseline(line),
             layout.ascentFor(size), layout.descentFor(size),
         )
     }
 
     /** The caret position nearest a point; second is true when it is the end of a wrapped line. */
     fun offsetAt(x: Float, y: Float): Pair<Int, Boolean> {
-        val p = paragraphAtY(y)
+        // In a table, the cell of the row under the point; past the row's ends, the nearest.
+        val row = rowRange(paragraphAtY(y))
+        val p = row.firstOrNull { x < paragraphLeft(it) + boxWidth(it) } ?: row.last
         val layout = paragraph(p)
         val line = layout.lineAtY(y - paragraphTop(p))
-        val (local, upstream) = layout.offsetAt(line, x)
+        val (local, upstream) = layout.offsetAt(line, x - paragraphLeft(p))
         return document.paragraphStart(p) + local to upstream
     }
 

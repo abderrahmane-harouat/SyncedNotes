@@ -292,6 +292,22 @@ private fun FrameWindowScope.Menus(model: NotesModel, editor: Editor, layout: Wi
                     CheckboxItem(color.title, checked = state?.calloutColor == color, enabled = editing, onCheckedChange = { act { c.toggleCallout(color, now()) }() })
                 }
             }
+            // A table, and with the caret in one its rows, columns and header row.
+            Menu("Table", enabled = editing) {
+                val inTable = state?.inTable == true
+                Item("Insert Table", shortcut = KeyShortcut(Key.T, meta = true, alt = true), enabled = editing, onClick = act { c.insertTable(now = now()) })
+                Separator()
+                Item("Add Row Above", enabled = inTable, onClick = act { c.addRow(below = false, now()) })
+                Item("Add Row Below", enabled = inTable, onClick = act { c.addRow(below = true, now()) })
+                Item("Add Column Left", enabled = inTable, onClick = act { c.addColumn(right = false, now()) })
+                Item("Add Column Right", enabled = inTable, onClick = act { c.addColumn(right = true, now()) })
+                Separator()
+                CheckboxItem("Header Row", checked = state?.tableHeader == true, enabled = inTable, onCheckedChange = { act { c.toggleHeaderRow(now()) }() })
+                Separator()
+                Item("Delete Row", enabled = inTable, onClick = act { c.deleteRow(now()) })
+                Item("Delete Column", enabled = inTable, onClick = act { c.deleteColumn(now()) })
+                Item("Delete Table", enabled = inTable, onClick = act { c.deleteTable(now()) })
+            }
             Item("Insert Divider", shortcut = KeyShortcut(Key.D, meta = true, shift = true), enabled = editing, onClick = act { c.insertDivider(now()) })
             Item("Insert Picture…", shortcut = KeyShortcut(Key.P, meta = true, shift = true), enabled = editing, onClick = { insertPicture(model, scope) })
             Separator()

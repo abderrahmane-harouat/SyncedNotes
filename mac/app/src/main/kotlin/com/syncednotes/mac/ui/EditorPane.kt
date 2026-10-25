@@ -292,6 +292,11 @@ private fun FormatToolbar(editor: Editor, onInsertPicture: () -> Unit) {
                 ToolbarButton(Icons.callout, "Callout", { calloutMenu = true }, selected = state?.role == Role.CALLOUT, menu = true)
                 MenuPopup(calloutMenu, { calloutMenu = false }, calloutItems(editor), offset = IntOffset(-40, 60))
             }
+            var tableMenu by remember { mutableStateOf(false) }
+            Box {
+                ToolbarButton(Icons.table, "Table", { tableMenu = true }, selected = state?.inTable == true, menu = true)
+                MenuPopup(tableMenu, { tableMenu = false }, tableItems(editor), offset = IntOffset(-40, 60))
+            }
             // Samsung's attach button, for the one thing it attaches here: a picture.
             ToolbarButton(Icons.photo, "Insert Picture (⇧⌘P)", onInsertPicture)
         }
@@ -324,6 +329,34 @@ fun calloutItems(editor: Editor): List<MenuItem> {
             editor.focus.requestFocus()
         }
     }
+}
+
+/**
+ * A new table, and with the caret in one, its rows and columns added or taken away and its
+ * header row on or off, as Notion's table menu offers.
+ */
+fun tableItems(editor: Editor): List<MenuItem> {
+    val composer = editor.composer
+    val inTable = editor.format?.inTable == true
+    fun act(title: String, enabled: Boolean = inTable, checked: Boolean = false, destructive: Boolean = false, run: () -> Unit) =
+        MenuItem(title, enabled = enabled, checked = checked, destructive = destructive) {
+            run()
+            editor.focus.requestFocus()
+        }
+    return listOf(
+        act("Insert Table", enabled = true) { composer.insertTable(now = now()) },
+        MenuItem.SEPARATOR,
+        act("Add Row Above") { composer.addRow(below = false, now()) },
+        act("Add Row Below") { composer.addRow(below = true, now()) },
+        act("Add Column Left") { composer.addColumn(right = false, now()) },
+        act("Add Column Right") { composer.addColumn(right = true, now()) },
+        MenuItem.SEPARATOR,
+        act("Header Row", checked = editor.format?.tableHeader == true) { composer.toggleHeaderRow(now()) },
+        MenuItem.SEPARATOR,
+        act("Delete Row") { composer.deleteRow(now()) },
+        act("Delete Column") { composer.deleteColumn(now()) },
+        act("Delete Table", destructive = true) { composer.deleteTable(now()) },
+    )
 }
 
 /** Plain code, or code in a language its syntax is coloured by; the one there is ticked. */

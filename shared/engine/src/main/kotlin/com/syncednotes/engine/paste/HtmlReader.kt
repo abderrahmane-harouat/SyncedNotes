@@ -7,6 +7,7 @@ import com.syncednotes.engine.text.ListKind
 import com.syncednotes.engine.text.ListLevel
 import com.syncednotes.engine.text.ParagraphStyle
 import com.syncednotes.engine.text.Role
+import com.syncednotes.engine.text.TableCell
 
 /**
  * Reads the HTML a browser or Notion puts on the clipboard with what was copied: the common
@@ -243,6 +244,7 @@ object HtmlReader {
     private class Walker {
         val out = FragmentBuilder()
         private var listIds = 0
+        private var tableIds = 0
         /** The last block was a heading or a divider, which needs no empty line after it. */
         private var afterHeading = false
 
@@ -367,7 +369,7 @@ object HtmlReader {
                 }
                 "table" -> {
                     separate(ctx)
-                    rows(e, ctx.copy(topLevel = false, item = null))
+                    table(e, ctx.copy(topLevel = false, item = null, callout = null))
                     out.startParagraph(paragraphStyle(ctx))
                 }
                 "div", "section", "article", "header", "footer", "main", "nav", "aside", "figure", "figcaption",
@@ -489,26 +491,52 @@ object HtmlReader {
             return sb.toString()
         }
 
-        /** A table as a line a row, cells set apart by a bar; a header cell's text is bold. */
-        private fun rows(table: Element, ctx: Context) {
-            for (child in table.children) {
-                if (child !is Element) continue
-                when (child.name) {
-                    "tr" -> {
-                        out.startParagraph(ParagraphStyle.DEFAULT)
-                        var first = true
-                        for (cell in child.children) {
-                            if (cell !is Element || (cell.name != "td" && cell.name != "th")) continue
-                            if (!first) out.append(" | ")
-                            first = false
-                            val cellCtx = styled(cell, ctx).let { if (cell.name == "th") it.copy(styles = it.styles + CharStyle.BOLD) else it }
-                            children(cell, cellCtx.copy(paragraph = ParagraphStyle.DEFAULT, inCell = true))
-                        }
-                        out.startParagraph(ParagraphStyle.DEFAULT)
+        /**
+         * A table as a table: a cell a paragraph, row after row, a row short of the widest
+         * filled out with empty cells and a cell spanning columns followed by empty ones. Its
+         * first row is a header when the page's is: its <thead>, or a row of <th> cells, whose
+         * text is then bold by being the header. Whatever a cell holds is that cell's line.
+         */
+        private fun table(table: Element, ctx: Context) {
+            val rows = ArrayList<Pair<List<Element>, Boolean>>()
+            fun collect(e: Element, head: Boolean) {
+                for (child in e.children) {
+                    if (child !is Element) continue
+                    when (child.name) {
+                        "tr" -> rows += child.children.filterIsInstance<Element>().filter { it.name == "td" || it.name == "th" } to head
+                        "thead" -> collect(child, true)
+                        "tbody", "tfoot" -> collect(child, head)
                     }
-                    "thead", "tbody", "tfoot" -> rows(child, ctx)
-                    else -> {}
                 }
+            }
+            collect(table, false)
+            val kept = rows.filter { it.first.isNotEmpty() }
+            if (kept.isEmpty()) return
+            fun span(cell: Element) = cell.attributes["colspan"]?.trim()?.toIntOrNull()?.coerceIn(1, 64) ?: 1
+            val columns = kept.maxOf { (cells, _) -> cells.sumOf { span(it) } }
+            val header = kept[0].second || kept[0].first.all { it.name == "th" }
+            val id = ++tableIds
+            for ((r, row) in kept.withIndex()) {
+                var c = 0
+                fun cellStyle() = ParagraphStyle(cell = TableCell(id, r, c, header))
+                for (cell in row.first) {
+                    val style = cellStyle()
+                    val inHeader = header && r == 0
+                    val inside = styled(cell, ctx).let {
+                        when {
+                            inHeader -> it.copy(styles = it.styles - CharStyle.BOLD, boldByRole = true)
+                            // A header cell down the side is bold as the page shows it.
+                            cell.name == "th" -> it.copy(styles = it.styles + CharStyle.BOLD)
+                            else -> it
+                        }
+                    }
+                    out.startParagraph(style)
+                    children(cell, inside.copy(paragraph = style, inCell = true))
+                    out.lineBreak()
+                    c++
+                    repeat(span(cell) - 1) { out.line("", cellStyle()).also { c++ } }
+                }
+                while (c < columns) out.line("", cellStyle()).also { c++ }
             }
         }
     }
